@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>S.I.M - Simple Inventory Management (Full Version)</title>
+
+    <!-- TAILWIND CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#2563EB", // Blue 600
+              secondary: "#475569", // Slate 600
+              success: "#16A34A", // Green 600
+              danger: "#DC2626", // Red 600
+              warning: "#CA8A04", // Yellow 600
+              purple: "#7C3AED", // Purple 600 (For Partners)
+            },
+          },
+        },
+      };
+    </script>
+    <!-- FONT AWESOME -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+
+    <!-- SHEETJS (Export Excel - US20) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+      /* CSS Tùy chỉnh */
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .sidebar-item.active {
+        background-color: rgba(37, 99, 235, 0.1);
+        color: #2563eb;
+        border-right: 3px solid #2563eb;
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+
+      /* Toast Animation */
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .toast-enter {
+        animation: slideIn 0.3s ease-out forwards;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800 h-screen flex overflow-hidden">
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-white shadow-md flex flex-col z-10 hidden md:flex">
+      <div class="p-6 border-b flex items-center gap-2">
+        <i class="fas fa-boxes text-primary text-2xl"></i>
+        <h1 class="text-xl font-bold text-gray-800">S.I.M Inventory</h1>
+      </div>
+
+      <nav class="flex-1 overflow-y-auto py-4">
+        <ul class="space-y-1">
+          <li>
+            <a
+              href="#"
+              onclick="App.navigate('dashboard')"
+              id="nav-dashboard"
+              class="sidebar-item flex items-center gap-3 px-6 py-3 hover:bg-gray-50 text-gray-600 transition-colors active"
+            >
+              <i class="fas fa-chart-line w-5"></i>
+              <span>Tổng quan (US18)</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#"
+              onclick="App.navigate('products')"
+              id="nav-products"
+              class="sidebar-item flex items-center gap-3 px-6 py-3 hover:bg-gray-50 text-gray-600 transition-colors"
+            >
+              <i class="fas fa-box w-5"></i> <span>Sản phẩm (US01-04)</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#"
+              onclick="App.navigate('transactions')"
+              id="nav-transactions"
+              class="sidebar-item flex items-center gap-3 px-6 py-3 hover:bg-gray-50 text-gray-600 transition-colors"
+            >
+              <i class="fas fa-exchange-alt w-5"></i>
+              <span>Nhập/Xuất (US05-08)</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#"
+              onclick="App.navigate('partners')"
+              id="nav-partners"
+              class="sidebar-item flex items-center gap-3 px-6 py-3 hover:bg-gray-50 text-gray-600 transition-colors"
+            >
+              <i class="fas fa-users w-5"></i> <span>Đối tác (US12-14)</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#"
+              onclick="App.navigate('stocktake')"
+              id="nav-stocktake"
+              class="sidebar-item flex items-center gap-3 px-6 py-3 hover:bg-gray-50 text-gray-600 transition-colors"
+            >
+              <i class="fas fa-clipboard-check w-5"></i>
+              <span>Kiểm kê kho (US10)</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="p-4 border-t text-xs text-gray-500 text-center">
+        &copy; 2026 S.I.M System v2.0
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <!-- Header Mobile & User Info -->
+      <header
+        class="bg-white shadow-sm p-4 flex justify-between items-center md:justify-end"
+      >
+        <button
+          class="md:hidden text-gray-600"
+          onclick="document.querySelector('aside').classList.toggle('hidden')"
+        >
+          <i class="fas fa-bars text-xl"></i>
+        </button>
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium text-gray-600">Admin User</span>
+          <div
+            class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold"
+          >
+            A
+          </div>
+        </div>
+      </header>
+
+      <!-- Content Views -->
+      <div
+        id="main-container"
+        class="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-100 custom-scrollbar relative"
+      >
+        <!-- VIEW: DASHBOARD (US18) -->
+        <div id="view-dashboard" class="space-y-6">
+          <div class="flex justify-between items-end">
+            <h2 class="text-2xl font-bold text-gray-800">Tổng quan kho hàng</h2>
+            <button
+              onclick="InventoryService.exportToExcel()"
+              class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow text-sm transition-colors"
+            >
+              <i class="fas fa-file-excel mr-2"></i> Xuất Báo Cáo (US20)
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- Total Value -->
+            <div
+              class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-primary"
+            >
+              <div class="text-gray-500 text-sm font-medium">
+                Tổng giá trị tồn kho
+              </div>
+              <div
+                class="text-2xl font-bold text-gray-800 mt-2"
+                id="dash-total-value"
+              >
+                0 VND
+              </div>
+            </div>
+            <!-- Total Items -->
+            <div
+              class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-indigo-500"
+            >
+              <div class="text-gray-500 text-sm font-medium">
+                Sản phẩm hoạt động
+              </div>
+              <div
+                class="text-2xl font-bold text-gray-800 mt-2"
+                id="dash-total-items"
+              >
+                0
+              </div>
+            </div>
+            <!-- Supplier Debt (US13) -->
+            <div
+              class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-danger"
+            >
+              <div class="text-gray-500 text-sm font-medium">
+                Nợ phải trả NCC
+              </div>
+              <div
+                class="text-2xl font-bold text-red-600 mt-2"
+                id="dash-total-debt"
+              >
+                0 VND
+              </div>
+            </div>
+            <!-- Low Stock Alert (US09) -->
+            <div
+              class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-warning"
+            >
+              <div class="text-gray-500 text-sm font-medium">
+                Cảnh báo sắp hết
+              </div>
+              <div
+                class="text-2xl font-bold text-gray-800 mt-2"
+                id="dash-low-stock"
+              >
+                0
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent History (US19) -->
+          <div class="bg-white rounded-lg shadow-sm p-6">
+            <h3 class="font-bold text-lg mb-4 text-gray-700">
+              Lịch sử giao dịch gần đây
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="text-xs text-gray-500 border-b uppercase">
+                    <th class="p-3">Mã GD</th>
+                    <th class="p-3">Loại</th>
+                    <th class="p-3">Sản phẩm</th>
+                    <th class="p-3">Đối tác</th>
+                    <th class="p-3 text-right">Số lượng</th>
+                    <th class="p-3 text-right">Thời gian</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-history-list" class="text-sm">
+                  <!-- JS render -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: PRODUCTS (US01-04) -->
+        <div id="view-products" class="hidden space-y-6">
+          <div
+            class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+          >
+            <h2 class="text-2xl font-bold text-gray-800">Quản lý sản phẩm</h2>
+            <button
+              onclick="ProductController.openModal()"
+              class="bg-primary hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-colors flex items-center gap-2"
+            >
+              <i class="fas fa-plus"></i> Thêm mới (US01)
+            </button>
+          </div>
+
+          <!-- Product List -->
+          <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="p-4 border-b flex gap-4">
+              <input
+                type="text"
+                id="product-search"
+                placeholder="Tìm kiếm tên, SKU..."
+                class="w-full md:w-1/3 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <select
+                id="product-filter-cat"
+                class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                onchange="ProductController.render()"
+              >
+                <option value="">Tất cả danh mục (US03)</option>
+                <option value="Electronics">Điện tử</option>
+                <option value="Food">Thực phẩm</option>
+                <option value="Clothing">Thời trang</option>
+                <option value="General">Khác</option>
+              </select>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <thead
+                  class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"
+                >
+                  <tr>
+                    <th class="p-4">SKU</th>
+                    <th class="p-4">Tên sản phẩm</th>
+                    <th class="p-4">Danh mục</th>
+                    <th class="p-4 text-right">Giá vốn</th>
+                    <th class="p-4 text-right">Giá bán</th>
+                    <th class="p-4 text-center">Tồn kho</th>
+                    <th class="p-4 text-center">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="product-list-body"
+                  class="divide-y divide-gray-100 text-sm"
+                >
+                  <!-- Render by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: TRANSACTIONS (US05, US06, US07, US08, US15, US16, US17) -->
+        <div id="view-transactions" class="hidden space-y-6">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">
+            Xử lý Nhập / Xuất / Điều chỉnh
+          </h2>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Transaction Form -->
+            <div class="bg-white p-6 rounded-lg shadow-sm">
+              <!-- Transaction Type Select -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2"
+                  >Loại giao dịch</label
+                >
+                <div class="grid grid-cols-3 gap-2">
+                  <button
+                    onclick="TransactionController.setMode('IN')"
+                    id="btn-mode-in"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-blue-50"
+                  >
+                    Nhập Hàng (US05)
+                  </button>
+                  <button
+                    onclick="TransactionController.setMode('OUT')"
+                    id="btn-mode-out"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-green-50"
+                  >
+                    Xuất Bán (US06)
+                  </button>
+                  <button
+                    onclick="TransactionController.setMode('RETURN')"
+                    id="btn-mode-return"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-yellow-50"
+                  >
+                    Khách Trả (US15)
+                  </button>
+                  <button
+                    onclick="TransactionController.setMode('RTV')"
+                    id="btn-mode-rtv"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-red-50"
+                  >
+                    Trả NCC (US16)
+                  </button>
+                  <button
+                    onclick="TransactionController.setMode('DISPOSAL')"
+                    id="btn-mode-disposal"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-gray-50"
+                  >
+                    Hủy Hàng (US17)
+                  </button>
+                  <button
+                    onclick="TransactionController.setMode('TRANSFER')"
+                    id="btn-mode-transfer"
+                    class="py-2 text-xs md:text-sm border rounded hover:bg-purple-50"
+                  >
+                    Chuyển Kho (US08)
+                  </button>
+                </div>
+              </div>
+
+              <form
+                id="transaction-form"
+                onsubmit="TransactionController.submit(event)"
+              >
+                <div class="space-y-4">
+                  <!-- Dynamic Partner Field -->
+                  <div id="div-partner-select" class="hidden">
+                    <label
+                      class="block text-sm font-medium text-gray-700 mb-1"
+                      id="lbl-partner"
+                      >Đối tác</label
+                    >
+                    <select
+                      id="trans-partner-id"
+                      class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                    >
+                      <!-- JS Fill -->
+                    </select>
+                  </div>
+
+                  <!-- Dynamic Transfer Destination -->
+                  <div id="div-transfer-dest" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Kho/Chi nhánh đích</label
+                    >
+                    <input
+                      type="text"
+                      id="trans-destination"
+                      class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                      placeholder="VD: Chi nhánh 2..."
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Sản phẩm</label
+                    >
+                    <select
+                      id="trans-product-id"
+                      class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                      required
+                      onchange="TransactionController.onProductSelect()"
+                    >
+                      <option value="">-- Chọn sản phẩm --</option>
+                    </select>
+                    <div
+                      id="trans-stock-hint"
+                      class="text-xs text-gray-500 mt-1"
+                    >
+                      Tồn hiện tại: -
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        >Số lượng</label
+                      >
+                      <input
+                        type="number"
+                        id="trans-quantity"
+                        min="1"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        >Đơn giá</label
+                      >
+                      <input
+                        type="number"
+                        id="trans-price"
+                        min="0"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Ghi chú (US07)</label
+                    >
+                    <input
+                      type="text"
+                      id="trans-note"
+                      class="w-full p-2 border rounded focus:ring-2 focus:ring-primary outline-none"
+                      placeholder="Lý do..."
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    class="w-full bg-primary text-white font-bold py-3 rounded shadow mt-2"
+                    id="trans-submit-btn"
+                  >
+                    Xác nhận
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- History / Product Card (US19) -->
+            <div class="bg-white p-6 rounded-lg shadow-sm flex flex-col h-full">
+              <h3 class="font-bold text-gray-700 mb-4 border-b pb-2">
+                Thẻ kho (Lịch sử SP)
+              </h3>
+              <div class="flex-1 overflow-y-auto custom-scrollbar relative">
+                <div
+                  id="stock-card-empty"
+                  class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm"
+                >
+                  Chọn một sản phẩm để xem lịch sử
+                </div>
+                <ul id="stock-card-list" class="space-y-3 hidden">
+                  <!-- JS Render -->
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: PARTNERS (US12, US13, US14) -->
+        <div id="view-partners" class="hidden space-y-6">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-gray-800">Quản lý Đối tác</h2>
+            <button
+              onclick="PartnerController.openModal()"
+              class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow transition-colors flex items-center gap-2"
+            >
+              <i class="fas fa-plus"></i> Thêm mới
+            </button>
+          </div>
+
+          <div class="bg-white rounded-lg shadow-sm">
+            <div class="border-b flex">
+              <button
+                onclick="PartnerController.switchTab('SUPPLIER')"
+                id="tab-supplier"
+                class="px-6 py-3 font-medium text-purple-600 border-b-2 border-purple-600"
+              >
+                Nhà cung cấp (US12)
+              </button>
+              <button
+                onclick="PartnerController.switchTab('CUSTOMER')"
+                id="tab-customer"
+                class="px-6 py-3 font-medium text-gray-500 hover:text-purple-600"
+              >
+                Khách hàng (US14)
+              </button>
+            </div>
+            <div class="p-0 overflow-x-auto">
+              <table class="w-full text-left">
+                <thead
+                  class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"
+                >
+                  <tr>
+                    <th class="p-4">Tên đối tác</th>
+                    <th class="p-4">Liên hệ</th>
+                    <th class="p-4 text-right" id="partner-col-metric">
+                      Công nợ (US13)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="partner-list-body"
+                  class="divide-y divide-gray-100 text-sm"
+                >
+                  <!-- JS Render -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: STOCKTAKE (US10, US11) -->
+        <div id="view-stocktake" class="hidden space-y-6">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">
+            Kiểm kê kho hàng
+          </h2>
+          <p class="text-sm text-gray-500 mb-4">
+            Hệ thống sẽ tự động tạo phiếu Nhập/Xuất để cân bằng kho sau khi xác
+            nhận (US11).
+          </p>
+
+          <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table class="w-full text-left">
+              <thead
+                class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"
+              >
+                <tr>
+                  <th class="p-4">Sản phẩm</th>
+                  <th class="p-4 text-center">Tồn hệ thống</th>
+                  <th class="p-4 text-center w-40">Thực tế</th>
+                  <th class="p-4 text-center w-24">Lệch</th>
+                  <th class="p-4 text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody
+                id="stocktake-list-body"
+                class="divide-y divide-gray-100 text-sm"
+              >
+                <!-- JS Render -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- MODAL: PRODUCT -->
+    <div
+      id="modal-product"
+      class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden transform transition-all"
+      >
+        <div
+          class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"
+        >
+          <h3 class="font-bold text-lg text-gray-800" id="modal-product-title">
+            Thêm sản phẩm mới
+          </h3>
+          <button
+            onclick="ProductController.closeModal()"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form
+          id="product-form"
+          onsubmit="ProductController.save(event)"
+          class="p-6 space-y-4"
+        >
+          <input type="hidden" id="prod-id" />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase"
+                >Mã SKU</label
+              >
+              <input
+                type="text"
+                id="prod-sku"
+                class="w-full border p-2 rounded focus:ring-primary outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase"
+                >Đơn vị</label
+              >
+              <input
+                type="text"
+                id="prod-unit"
+                class="w-full border p-2 rounded focus:ring-primary outline-none"
+                placeholder="Cái, Hộp..."
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gray-500 uppercase"
+              >Tên sản phẩm</label
+            >
+            <input
+              type="text"
+              id="prod-name"
+              class="w-full border p-2 rounded focus:ring-primary outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gray-500 uppercase"
+              >Danh mục (US03)</label
+            >
+            <select
+              id="prod-category"
+              class="w-full border p-2 rounded focus:ring-primary outline-none"
+            >
+              <option value="Electronics">Điện tử</option>
+              <option value="Food">Thực phẩm</option>
+              <option value="Clothing">Thời trang</option>
+              <option value="General">Khác</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase"
+                >Giá vốn</label
+              >
+              <input
+                type="number"
+                id="prod-cost"
+                class="w-full border p-2 rounded focus:ring-primary outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase"
+                >Giá bán</label
+              >
+              <input
+                type="number"
+                id="prod-price"
+                class="w-full border p-2 rounded focus:ring-primary outline-none"
+                required
+              />
+            </div>
+          </div>
+          <div class="pt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onclick="ProductController.closeModal()"
+              class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              class="px-6 py-2 bg-primary text-white rounded hover:bg-blue-700 shadow"
+            >
+              Lưu
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: PARTNER (NEW) -->
+    <div
+      id="modal-partner"
+      class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden transform transition-all"
+      >
+        <div
+          class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"
+        >
+          <h3 class="font-bold text-lg text-gray-800">Thêm đối tác mới</h3>
+          <button
+            onclick="PartnerController.closeModal()"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form
+          id="partner-form"
+          onsubmit="PartnerController.save(event)"
+          class="p-6 space-y-4"
+        >
+          <div>
+            <label class="block text-sm font-medium mb-1">Loại đối tác</label>
+            <select
+              id="partner-type"
+              class="w-full border p-2 rounded outline-none bg-gray-50"
+            >
+              <option value="SUPPLIER">Nhà cung cấp (Supplier)</option>
+              <option value="CUSTOMER">Khách hàng (Customer)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Tên đối tác</label>
+            <input
+              type="text"
+              id="partner-name"
+              class="w-full border p-2 rounded focus:ring-primary outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1"
+              >Số điện thoại / Liên hệ</label
+            >
+            <input
+              type="text"
+              id="partner-contact"
+              class="w-full border p-2 rounded focus:ring-primary outline-none"
+            />
+          </div>
+          <div class="pt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onclick="PartnerController.closeModal()"
+              class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              class="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 shadow"
+            >
+              Lưu
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div
+      id="toast-container"
+      class="fixed top-5 right-5 z-50 flex flex-col gap-2"
+    ></div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+      /**
+       * =========================================================================
+       * DATA LAYER (MOCK DB)
+       * Updated for Level 3 & 4
+       * =========================================================================
+       */
+      const MockDB = {
+        products: [
+          {
+            id: "101",
+            sku: "IP13",
+            name: "iPhone 13 128GB",
+            category: "Electronics",
+            cost: 15000000,
+            price: 18000000,
+            unit: "Cái",
+            quantity: 10,
+            isActive: true,
+          },
+          {
+            id: "102",
+            sku: "SS22",
+            name: "Samsung S22 Ultra",
+            category: "Electronics",
+            cost: 20000000,
+            price: 25000000,
+            unit: "Cái",
+            quantity: 5,
+            isActive: true,
+          },
+          {
+            id: "103",
+            sku: "MILK01",
+            name: "Sữa tươi TH True Milk",
+            category: "Food",
+            cost: 25000,
+            price: 32000,
+            unit: "Hộp",
+            quantity: 100,
+            isActive: true,
+          },
+        ],
+        // US12: Supplier Database + US14: Customer Info
+        partners: [
+          {
+            id: "S001",
+            type: "SUPPLIER",
+            name: "Công ty TNHH Apple VN",
+            contact: "0901234567",
+            debt: 50000000,
+          },
+          {
+            id: "S002",
+            type: "SUPPLIER",
+            name: "NPP Sữa Vinamilk",
+            contact: "0909888777",
+            debt: 2500000,
+          },
+          {
+            id: "C001",
+            type: "CUSTOMER",
+            name: "Nguyễn Văn Khách",
+            contact: "0912333444",
+            points: 150,
+          },
+        ],
+        transactions: [
+          {
+            id: "T001",
+            type: "IN",
+            productId: "101",
+            partnerId: "S001",
+            quantity: 10,
+            price: 15000000,
+            date: "2025-12-01 09:00",
+            note: "Nhập hàng ban đầu",
+          },
+        ],
+      };
+
+      /**
+       * =========================================================================
+       * UTILS
+       * =========================================================================
+       */
+      const Utils = {
+        formatCurrency: (amount) =>
+          new Intl.NumberFormat("vi-VN", {
+            style: "currency",
+            currency: "VND",
+          }).format(amount),
+        formatDate: (dateStr) => {
+          const date = dateStr ? new Date(dateStr) : new Date();
+          return date.toLocaleString("vi-VN");
+        },
+        showToast: (message, type = "success") => {
+          const container = document.getElementById("toast-container");
+          const div = document.createElement("div");
+          const colors = {
+            success: "bg-green-500",
+            error: "bg-red-500",
+            info: "bg-blue-500",
+            warning: "bg-yellow-500",
+          };
+          div.className = `${
+            colors[type] || "bg-blue-500"
+          } text-white px-4 py-3 rounded shadow-lg flex items-center gap-2 toast-enter`;
+          div.innerHTML = `<i class="fas ${
+            type === "success" ? "fa-check-circle" : "fa-info-circle"
+          }"></i> <span>${message}</span>`;
+          container.appendChild(div);
+          setTimeout(() => div.remove(), 3000);
+        },
+        generateId: () => Math.random().toString(36).substr(2, 6).toUpperCase(),
+      };
+
+      /**
+       * =========================================================================
+       * SERVICE LAYER
+       * =========================================================================
+       */
+
+      // --- PARTNER SERVICE (US12, US13, US14) ---
+      const PartnerService = {
+        getAll: (type) => MockDB.partners.filter((p) => p.type === type),
+
+        add: (data) => {
+          const newPartner = {
+            ...data,
+            id: Utils.generateId(),
+            debt: 0,
+            points: 0,
+          };
+          MockDB.partners.push(newPartner);
+          return newPartner;
+        },
+
+        getById: (id) => MockDB.partners.find((p) => p.id === id),
+
+        // US13: Update Supplier Debt
+        updateDebt: (id, amount) => {
+          const p = PartnerService.getById(id);
+          if (p && p.type === "SUPPLIER") p.debt += amount;
+        },
+
+        // US14: Update Customer Loyalty Points
+        updatePoints: (id, amount) => {
+          const p = PartnerService.getById(id);
+          if (p && p.type === "CUSTOMER")
+            p.points += Math.floor(amount / 100000); // 100k = 1 point
+        },
+      };
+
+      // --- INVENTORY SERVICE ---
+      const InventoryService = {
+        getProducts: (filter = "", category = "") => {
+          let data = MockDB.products.filter((p) => p.isActive);
+          if (category) data = data.filter((p) => p.category === category);
+          if (filter) {
+            const lower = filter.toLowerCase();
+            data = data.filter(
+              (p) =>
+                p.name.toLowerCase().includes(lower) ||
+                p.sku.toLowerCase().includes(lower)
+            );
+          }
+          return data;
+        },
+
+        getProductById: (id) => MockDB.products.find((p) => p.id === id),
+        addProduct: (data) =>
+          MockDB.products.push({
+            ...data,
+            id: Utils.generateId(),
+            quantity: 0,
+            isActive: true,
+          }),
+        updateProduct: (id, data) => {
+          const idx = MockDB.products.findIndex((p) => p.id === id);
+          if (idx !== -1)
+            MockDB.products[idx] = { ...MockDB.products[idx], ...data };
+        },
+        deleteProduct: (id) => {
+          const p = MockDB.products.find((p) => p.id === id);
+          if (p) p.isActive = false;
+        },
+
+        // CORE TRANSACTION LOGIC (US05-08, US15-17)
+        processTransaction: (
+          type,
+          productId,
+          quantity,
+          price,
+          partnerId,
+          note,
+          destination
+        ) => {
+          const product = MockDB.products.find((p) => p.id === productId);
+          if (!product) throw new Error("Sản phẩm không tồn tại");
+
+          const qty = parseInt(quantity);
+          const val = parseInt(price);
+          const totalAmount = qty * val;
+
+          // Validate Logic
+          const isOutbound = ["OUT", "RTV", "DISPOSAL", "TRANSFER"].includes(
+            type
+          );
+          if (isOutbound && product.quantity < qty) {
+            throw new Error("Số lượng tồn kho không đủ!");
+          }
+
+          // 1. Update Stock Quantity
+          if (type === "IN" || type === "RETURN") {
+            product.quantity += qty;
+            if (type === "IN") product.cost = val; // Simple moving average simplified
+          } else {
+            product.quantity -= qty;
+          }
+
+          // 2. Handle Partner Logic (Debt/Points)
+          if (partnerId) {
+            // US05: Nhập hàng -> Tăng nợ NCC
+            if (type === "IN")
+              PartnerService.updateDebt(partnerId, totalAmount);
+            // US16: Trả hàng NCC -> Giảm nợ NCC
+            if (type === "RTV")
+              PartnerService.updateDebt(partnerId, -totalAmount);
+            // US06: Xuất bán -> Tích điểm Khách hàng
+            if (type === "OUT")
+              PartnerService.updatePoints(partnerId, totalAmount);
+          }
+
+          // 3. Save Transaction
+          const transaction = {
+            id: Utils.generateId(),
+            type,
+            productId,
+            partnerId,
+            quantity: qty,
+            price: val,
+            date: new Date().toISOString(),
+            note:
+              type === "TRANSFER"
+                ? `Chuyển tới: ${destination} - ${note}`
+                : note,
+            destination, // for US08
+          };
+          MockDB.transactions.unshift(transaction);
+          return transaction;
+        },
+
+        // US11: Auto adjust
+        adjustStock: (productId, realQty) => {
+          const product = MockDB.products.find((p) => p.id === productId);
+          if (!product) return;
+          const diff = realQty - product.quantity;
+          if (diff === 0) return;
+
+          const type = diff > 0 ? "IN" : "DISPOSAL"; // Nếu thiếu thì coi như Hủy/Mất (Disposal), thừa thì Nhập (IN)
+          InventoryService.processTransaction(
+            type,
+            productId,
+            Math.abs(diff),
+            product.cost,
+            null,
+            "Cân bằng kho (Stocktake)"
+          );
+        },
+
+        getProductHistory: (id) =>
+          MockDB.transactions.filter((t) => t.productId === id),
+
+        getDashboardStats: () => {
+          const active = MockDB.products.filter((p) => p.isActive);
+          const totalValue = active.reduce(
+            (sum, p) => sum + p.quantity * p.cost,
+            0
+          );
+
+          // US13: Total Supplier Debt
+          const suppliers = PartnerService.getAll("SUPPLIER");
+          const totalDebt = suppliers.reduce((sum, s) => sum + s.debt, 0);
+
+          const recent = MockDB.transactions.slice(0, 5).map((t) => {
+            const p = MockDB.products.find((prod) => prod.id === t.productId);
+            const partner = MockDB.partners.find(
+              (par) => par.id === t.partnerId
+            );
+            return {
+              ...t,
+              productName: p?.name || "?",
+              partnerName: partner?.name || "-",
+            };
+          });
+
+          return {
+            totalItems: active.length,
+            totalValue,
+            totalDebt,
+            lowStock: active.filter((p) => p.quantity < 5).length,
+            recentTransactions: recent,
+          };
+        },
+
+        exportToExcel: () => {
+          const data = MockDB.products
+            .filter((p) => p.isActive)
+            .map((p) => ({
+              SKU: p.sku,
+              Name: p.name,
+              Category: p.category,
+              Cost: p.cost,
+              Price: p.price,
+              Quantity: p.quantity,
+              Value: p.cost * p.quantity,
+            }));
+          const ws = XLSX.utils.json_to_sheet(data);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Stock");
+          XLSX.writeFile(wb, "Inventory_Report.xlsx");
+          Utils.showToast("Đã tải xuống Excel!");
+        },
+      };
+
+      /**
+       * =========================================================================
+       * CONTROLLERS
+       * =========================================================================
+       */
+
+      const App = {
+        currentView: "dashboard",
+        init: () => {
+          App.navigate("dashboard");
+        },
+        navigate: (viewId) => {
+          App.currentView = viewId;
+          document
+            .querySelectorAll(".sidebar-item")
+            .forEach((el) => el.classList.remove("active"));
+          const nav = document.getElementById(`nav-${viewId}`);
+          if (nav) nav.classList.add("active");
+
+          [
+            "dashboard",
+            "products",
+            "transactions",
+            "partners",
+            "stocktake",
+          ].forEach((id) => {
+            document.getElementById(`view-${id}`).classList.add("hidden");
+          });
+          document.getElementById(`view-${viewId}`).classList.remove("hidden");
+
+          if (viewId === "dashboard") DashboardController.render();
+          if (viewId === "products") ProductController.render();
+          if (viewId === "transactions") TransactionController.init();
+          if (viewId === "partners") PartnerController.render();
+          if (viewId === "stocktake") StocktakeController.render();
+        },
+      };
+
+      const DashboardController = {
+        render: () => {
+          const stats = InventoryService.getDashboardStats();
+          document.getElementById("dash-total-value").textContent =
+            Utils.formatCurrency(stats.totalValue);
+          document.getElementById("dash-total-items").textContent =
+            stats.totalItems;
+          document.getElementById("dash-total-debt").textContent =
+            Utils.formatCurrency(stats.totalDebt);
+          document.getElementById("dash-low-stock").textContent =
+            stats.lowStock;
+
+          const tbody = document.getElementById("dash-history-list");
+          const typeLabels = {
+            IN: "NHẬP",
+            OUT: "XUẤT",
+            RETURN: "KHÁCH TRẢ",
+            RTV: "TRẢ NCC",
+            DISPOSAL: "HỦY",
+            TRANSFER: "CHUYỂN",
+          };
+          const typeColors = {
+            IN: "text-green-700 bg-green-100",
+            OUT: "text-blue-700 bg-blue-100",
+            DISPOSAL: "text-gray-700 bg-gray-200",
+            RTV: "text-red-700 bg-red-100",
+            TRANSFER: "text-purple-700 bg-purple-100",
+            RETURN: "text-yellow-700 bg-yellow-100",
+          };
+
+          tbody.innerHTML = stats.recentTransactions
+            .map(
+              (t) => `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50">
+                        <td class="p-3 text-gray-500">#${t.id}</td>
+                        <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${
+                          typeColors[t.type]
+                        }">${typeLabels[t.type] || t.type}</span></td>
+                        <td class="p-3 font-medium">${t.productName}</td>
+                        <td class="p-3 text-gray-600 text-xs">${
+                          t.partnerName
+                        }</td>
+                        <td class="p-3 text-right font-bold">${t.quantity}</td>
+                        <td class="p-3 text-right text-gray-400 text-xs">${Utils.formatDate(
+                          t.date
+                        )}</td>
+                    </tr>
+                `
+            )
+            .join("");
+        },
+      };
+
+      const ProductController = {
+        isEditing: false,
+        render: () => {
+          const filter = document.getElementById("product-search").value;
+          const cat = document.getElementById("product-filter-cat").value;
+          const products = InventoryService.getProducts(filter, cat);
+          const tbody = document.getElementById("product-list-body");
+
+          tbody.innerHTML = products.length
+            ? products
+                .map(
+                  (p) => `
+                    <tr class="hover:bg-blue-50 transition-colors group">
+                        <td class="p-4 font-bold text-gray-600">${p.sku}</td>
+                        <td class="p-4 font-medium text-primary">${p.name}</td>
+                        <td class="p-4"><span class="bg-gray-100 px-2 py-1 rounded text-xs">${
+                          p.category
+                        }</span></td>
+                        <td class="p-4 text-right text-gray-500">${Utils.formatCurrency(
+                          p.cost
+                        )}</td>
+                        <td class="p-4 text-right font-bold">${Utils.formatCurrency(
+                          p.price
+                        )}</td>
+                        <td class="p-4 text-center"><span class="px-2 py-1 rounded text-xs font-bold ${
+                          p.quantity < 5
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }">${p.quantity} ${p.unit}</span></td>
+                        <td class="p-4 text-center">
+                            <button onclick="ProductController.edit('${
+                              p.id
+                            }')" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fas fa-edit"></i></button>
+                            <button onclick="ProductController.delete('${
+                              p.id
+                            }')" class="text-red-400 hover:text-red-600 mx-1"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `
+                )
+                .join("")
+            : '<tr><td colspan="7" class="p-6 text-center text-gray-500">Không tìm thấy</td></tr>';
+        },
+        openModal: () => {
+          ProductController.isEditing = false;
+          document.getElementById("product-form").reset();
+          document.getElementById("modal-product-title").textContent =
+            "Thêm sản phẩm mới";
+          document.getElementById("modal-product").classList.remove("hidden");
+        },
+        closeModal: () =>
+          document.getElementById("modal-product").classList.add("hidden"),
+        edit: (id) => {
+          const p = InventoryService.getProductById(id);
+          ProductController.isEditing = true;
+          document.getElementById("modal-product-title").textContent =
+            "Cập nhật sản phẩm";
+          document.getElementById("prod-id").value = p.id;
+          document.getElementById("prod-sku").value = p.sku;
+          document.getElementById("prod-name").value = p.name;
+          document.getElementById("prod-category").value = p.category;
+          document.getElementById("prod-cost").value = p.cost;
+          document.getElementById("prod-price").value = p.price;
+          document.getElementById("prod-unit").value = p.unit;
+          document.getElementById("modal-product").classList.remove("hidden");
+        },
+        save: (e) => {
+          e.preventDefault();
+          const data = {
+            sku: document.getElementById("prod-sku").value,
+            name: document.getElementById("prod-name").value,
+            category: document.getElementById("prod-category").value,
+            cost: Number(document.getElementById("prod-cost").value),
+            price: Number(document.getElementById("prod-price").value),
+            unit: document.getElementById("prod-unit").value,
+          };
+          if (ProductController.isEditing) {
+            InventoryService.updateProduct(
+              document.getElementById("prod-id").value,
+              data
+            );
+            Utils.showToast("Cập nhật thành công!");
+          } else {
+            InventoryService.addProduct(data);
+            Utils.showToast("Thêm mới thành công!");
+          }
+          ProductController.closeModal();
+          ProductController.render();
+        },
+        delete: (id) => {
+          if (confirm("Xóa sản phẩm này?")) {
+            InventoryService.deleteProduct(id);
+            ProductController.render();
+          }
+        },
+      };
+
+      const PartnerController = {
+        currentTab: "SUPPLIER",
+        render: () => {
+          const list = PartnerService.getAll(PartnerController.currentTab);
+          const tbody = document.getElementById("partner-list-body");
+          const colMetric = document.getElementById("partner-col-metric");
+
+          colMetric.textContent =
+            PartnerController.currentTab === "SUPPLIER"
+              ? "Công nợ (US13)"
+              : "Điểm tích lũy (US14)";
+
+          tbody.innerHTML = list.length
+            ? list
+                .map(
+                  (p) => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-4 font-bold text-gray-700">${p.name}</td>
+                        <td class="p-4 text-gray-600">${p.contact}</td>
+                        <td class="p-4 text-right font-bold ${
+                          PartnerController.currentTab === "SUPPLIER"
+                            ? "text-red-600"
+                            : "text-primary"
+                        }">
+                            ${
+                              PartnerController.currentTab === "SUPPLIER"
+                                ? Utils.formatCurrency(p.debt)
+                                : p.points + " điểm"
+                            }
+                        </td>
+                    </tr>
+                `
+                )
+                .join("")
+            : '<tr><td colspan="3" class="p-6 text-center text-gray-400">Chưa có dữ liệu</td></tr>';
+        },
+        switchTab: (tab) => {
+          PartnerController.currentTab = tab;
+          document.getElementById("tab-supplier").className =
+            tab === "SUPPLIER"
+              ? "px-6 py-3 font-medium text-purple-600 border-b-2 border-purple-600"
+              : "px-6 py-3 font-medium text-gray-500 hover:text-purple-600";
+          document.getElementById("tab-customer").className =
+            tab === "CUSTOMER"
+              ? "px-6 py-3 font-medium text-purple-600 border-b-2 border-purple-600"
+              : "px-6 py-3 font-medium text-gray-500 hover:text-purple-600";
+          PartnerController.render();
+        },
+        openModal: () => {
+          document.getElementById("partner-form").reset();
+          document.getElementById("modal-partner").classList.remove("hidden");
+        },
+        closeModal: () =>
+          document.getElementById("modal-partner").classList.add("hidden"),
+        save: (e) => {
+          e.preventDefault();
+          const data = {
+            type: document.getElementById("partner-type").value,
+            name: document.getElementById("partner-name").value,
+            contact: document.getElementById("partner-contact").value,
+          };
+          PartnerService.add(data);
+          Utils.showToast("Thêm đối tác thành công!");
+          PartnerController.closeModal();
+          PartnerController.switchTab(data.type);
+        },
+      };
+
+      const TransactionController = {
+        currentMode: "IN",
+        init: () => {
+          const select = document.getElementById("trans-product-id");
+          const products = InventoryService.getProducts();
+          select.innerHTML =
+            '<option value="">-- Chọn sản phẩm --</option>' +
+            products
+              .map(
+                (p) =>
+                  `<option value="${p.id}" data-price="${p.price}" data-cost="${p.cost}" data-qty="${p.quantity}">${p.sku} - ${p.name}</option>`
+              )
+              .join("");
+          TransactionController.setMode("IN");
+        },
+        setMode: (mode) => {
+          TransactionController.currentMode = mode;
+
+          // Style buttons
+          const modes = ["in", "out", "return", "rtv", "disposal", "transfer"];
+          modes.forEach((m) => {
+            const btn = document.getElementById(`btn-mode-${m}`);
+            btn.classList.remove("ring-2", "ring-primary", "font-bold");
+            if (m.toUpperCase() === mode)
+              btn.classList.add("ring-2", "ring-primary", "font-bold");
+          });
+
+          // Handle Dynamic Fields
+          const divPartner = document.getElementById("div-partner-select");
+          const divTransfer = document.getElementById("div-transfer-dest");
+          const selectPartner = document.getElementById("trans-partner-id");
+          const lblPartner = document.getElementById("lbl-partner");
+
+          // Hide all first
+          divPartner.classList.add("hidden");
+          divTransfer.classList.add("hidden");
+
+          // Logic display
+          if (mode === "IN" || mode === "RTV") {
+            divPartner.classList.remove("hidden");
+            lblPartner.textContent = "Nhà cung cấp (Supplier)";
+            selectPartner.innerHTML =
+              '<option value="">-- Chọn NCC --</option>' +
+              PartnerService.getAll("SUPPLIER")
+                .map((s) => `<option value="${s.id}">${s.name}</option>`)
+                .join("");
+          } else if (mode === "OUT" || mode === "RETURN") {
+            divPartner.classList.remove("hidden");
+            lblPartner.textContent = "Khách hàng (Customer)";
+            selectPartner.innerHTML =
+              '<option value="">-- Khách lẻ --</option>' +
+              PartnerService.getAll("CUSTOMER")
+                .map((c) => `<option value="${c.id}">${c.name}</option>`)
+                .join("");
+          } else if (mode === "TRANSFER") {
+            divTransfer.classList.remove("hidden");
+          }
+
+          TransactionController.onProductSelect();
+        },
+        onProductSelect: () => {
+          const select = document.getElementById("trans-product-id");
+          const option = select.options[select.selectedIndex];
+          const hint = document.getElementById("trans-stock-hint");
+          const priceInput = document.getElementById("trans-price");
+          const cardList = document.getElementById("stock-card-list");
+          const cardEmpty = document.getElementById("stock-card-empty");
+
+          if (!option.value) {
+            hint.textContent = "Tồn hiện tại: -";
+            priceInput.value = "";
+            cardList.classList.add("hidden");
+            cardEmpty.classList.remove("hidden");
+            return;
+          }
+
+          const qty = option.getAttribute("data-qty");
+          const cost = option.getAttribute("data-cost");
+          const price = option.getAttribute("data-price");
+
+          hint.textContent = `Tồn hiện tại: ${qty}`;
+          priceInput.value =
+            TransactionController.currentMode === "IN" ? cost : price;
+
+          // Load History
+          cardList.classList.remove("hidden");
+          cardEmpty.classList.add("hidden");
+          const history = InventoryService.getProductHistory(option.value);
+          cardList.innerHTML = history.length
+            ? history
+                .map(
+                  (h) => `
+                    <li class="p-3 bg-gray-50 rounded border-l-4 ${
+                      h.type === "IN" ? "border-green-500" : "border-red-500"
+                    }">
+                        <div class="flex justify-between">
+                            <span class="font-bold text-xs">${h.type}</span>
+                            <span class="text-xs text-gray-500">${Utils.formatDate(
+                              h.date
+                            )}</span>
+                        </div>
+                        <div class="text-xs mt-1 truncate">${h.note || ""}</div>
+                    </li>
+                `
+                )
+                .join("")
+            : '<li class="text-center text-gray-400 text-xs">Chưa có GD</li>';
+        },
+        submit: (e) => {
+          e.preventDefault();
+          const data = {
+            productId: document.getElementById("trans-product-id").value,
+            partnerId: document.getElementById("trans-partner-id").value,
+            quantity: document.getElementById("trans-quantity").value,
+            price: document.getElementById("trans-price").value,
+            note: document.getElementById("trans-note").value,
+            destination: document.getElementById("trans-destination").value,
+          };
+          try {
+            InventoryService.processTransaction(
+              TransactionController.currentMode,
+              data.productId,
+              data.quantity,
+              data.price,
+              data.partnerId,
+              data.note,
+              data.destination
+            );
+            Utils.showToast("Giao dịch thành công!");
+            document.getElementById("trans-quantity").value = "";
+            document.getElementById("trans-note").value = "";
+            TransactionController.init();
+          } catch (err) {
+            Utils.showToast(err.message, "error");
+          }
+        },
+      };
+
+      const StocktakeController = {
+        render: () => {
+          const products = InventoryService.getProducts();
+          const tbody = document.getElementById("stocktake-list-body");
+          tbody.innerHTML = products
+            .map(
+              (p) => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-4 font-bold text-gray-700">${p.name}</td>
+                        <td class="p-4 text-center font-bold text-gray-600" id="sys-qty-${p.id}">${p.quantity}</td>
+                        <td class="p-4 text-center"><input type="number" id="real-qty-${p.id}" value="${p.quantity}" class="w-20 p-1 border rounded text-center outline-none"></td>
+                        <td class="p-4 text-center text-gray-400">-</td>
+                        <td class="p-4 text-right"><button onclick="StocktakeController.save('${p.id}')" class="text-sm bg-gray-100 hover:bg-primary hover:text-white px-3 py-1 rounded transition-colors text-gray-600"><i class="fas fa-check"></i> Lưu</button></td>
+                    </tr>
+                `
+            )
+            .join("");
+        },
+        save: (id) => {
+          const real = parseInt(
+            document.getElementById(`real-qty-${id}`).value
+          );
+          const sys = parseInt(
+            document.getElementById(`sys-qty-${id}`).textContent
+          );
+          if (real === sys) return Utils.showToast("Số lượng khớp!", "info");
+          if (confirm("Điều chỉnh kho?")) {
+            InventoryService.adjustStock(id, real);
+            Utils.showToast("Đã cân bằng kho!");
+            StocktakeController.render();
+          }
+        },
+      };
+
+      // Event listeners
+      document
+        .getElementById("product-search")
+        .addEventListener("input", ProductController.render);
+      document.addEventListener("DOMContentLoaded", App.init);
+    </script>
+  </body>
+</html>
