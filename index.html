@@ -106,7 +106,7 @@
                 type="text"
                 id="login-username"
                 class="w-full pl-10 p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                placeholder="admin / warehouse / sales"
+                placeholder="admin / warehouse / sales / staff"
                 required
               />
             </div>
@@ -146,17 +146,26 @@
             class="mt-6 p-3 bg-gray-50 rounded text-xs text-gray-500 border border-gray-200"
           >
             <p class="font-bold mb-1">Tài khoản demo:</p>
-            <p>
-              👑 <span class="font-mono text-gray-700">admin</span> /
-              <span class="font-mono">123456</span> (Full quyền)
-            </p>
-            <p>
-              📦 <span class="font-mono text-gray-700">warehouse</span> /
-              <span class="font-mono">123456</span> (Thủ kho)
-            </p>
-            <p>
-              🛒 <span class="font-mono text-gray-700">sales</span> /
-              <span class="font-mono">123456</span> (Bán hàng)
+            <div class="grid grid-cols-2 gap-2">
+              <p>
+                👑 <span class="font-mono text-gray-700">admin</span> (Owner)
+              </p>
+              <p>
+                👔 <span class="font-mono text-gray-700">manager</span> (Quản
+                lý)
+              </p>
+              <p>
+                📦 <span class="font-mono text-gray-700">warehouse</span> (Kho)
+              </p>
+              <p>
+                🛒 <span class="font-mono text-gray-700">sales</span> (Sale)
+              </p>
+              <p>
+                🧹 <span class="font-mono text-gray-700">staff</span> (NV chung)
+              </p>
+            </div>
+            <p class="mt-2 italic text-center text-[10px] text-gray-400">
+              Mật khẩu chung: 123456
             </p>
           </div>
         </form>
@@ -208,9 +217,11 @@
               id="reg-role"
               class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
             >
-              <option value="OWNER">Chủ cửa hàng / Quản lý</option>
-              <option value="WAREHOUSE">Nhân viên Kho</option>
-              <option value="SALES">Nhân viên Bán hàng</option>
+              <option value="OWNER">Chủ cửa hàng (Owner)</option>
+              <option value="MANAGER">Quản lý (Manager)</option>
+              <option value="WAREHOUSE">Nhân viên Kho (Warehouse)</option>
+              <option value="SALES">Nhân viên Bán hàng (Sales)</option>
+              <option value="STAFF">Nhân viên chung (Staff)</option>
             </select>
           </div>
           <button
@@ -1005,15 +1016,30 @@
             id: "u2",
             username: "warehouse",
             password: "123",
-            fullname: "Nhân viên Kho",
+            fullname: "NV Kho",
             role: "WAREHOUSE",
           },
           {
             id: "u3",
             username: "sales",
             password: "123",
-            fullname: "Nhân viên Bán hàng",
+            fullname: "NV Bán Hàng",
             role: "SALES",
+          },
+          // ADDED: New roles
+          {
+            id: "u4",
+            username: "manager",
+            password: "123",
+            fullname: "Quản Lý",
+            role: "MANAGER",
+          },
+          {
+            id: "u5",
+            username: "staff",
+            password: "123",
+            fullname: "Nhân Viên Chung",
+            role: "STAFF",
           },
         ],
         products: [
@@ -1126,7 +1152,7 @@
 
       /**
        * =========================================================================
-       * AUTH SERVICE & RBAC (NEW)
+       * AUTH SERVICE & RBAC
        * =========================================================================
        */
       const AuthService = {
@@ -1137,7 +1163,6 @@
           const u = document.getElementById("login-username").value;
           const p = document.getElementById("login-password").value;
 
-          // Flexible check: matches exact password OR '123456' for demo convenience
           const user = MockDB.users.find(
             (usr) =>
               usr.username === u && (usr.password === p || p === "123456")
@@ -1193,20 +1218,48 @@
           }
         },
 
-        // Check if user has permission
+        // --- RBAC HELPER METHODS ---
+
+        // 1. Can see sensitive Cost info? (Security)
         canSeeCost: () => {
           const role = AuthService.currentUser?.role;
-          return role === "OWNER";
+          return ["OWNER", "MANAGER"].includes(role);
         },
 
-        // Get permitted transaction modes
+        // 2. Can Add new product? (US01)
+        canAddProduct: () => {
+          const role = AuthService.currentUser?.role;
+          return ["OWNER", "MANAGER", "WAREHOUSE"].includes(role);
+        },
+
+        // 3. Can Edit product? (US02)
+        canEditProduct: () => {
+          const role = AuthService.currentUser?.role;
+          return ["OWNER", "MANAGER"].includes(role);
+        },
+
+        // 4. Can Delete product? (US04)
+        canDeleteProduct: () => {
+          const role = AuthService.currentUser?.role;
+          return ["OWNER", "MANAGER"].includes(role);
+        },
+
+        // 5. Get permitted transaction modes
         getPermittedModes: () => {
           const role = AuthService.currentUser?.role;
-          if (role === "OWNER")
-            return ["IN", "OUT", "RETURN", "RTV", "DISPOSAL", "TRANSFER"];
-          if (role === "WAREHOUSE") return ["IN", "TRANSFER", "DISPOSAL"];
-          if (role === "SALES") return ["OUT", "RETURN"];
-          return [];
+          switch (role) {
+            case "OWNER":
+            case "MANAGER":
+              return ["IN", "OUT", "RETURN", "RTV", "DISPOSAL", "TRANSFER"];
+            case "WAREHOUSE":
+              return ["IN", "TRANSFER"]; // US05, US08
+            case "SALES":
+              return ["OUT", "RETURN"]; // US06, US15
+            case "STAFF":
+              return ["DISPOSAL"]; // US17
+            default:
+              return [];
+          }
         },
       };
 
@@ -1431,29 +1484,26 @@
         },
 
         applyPermissions: () => {
-          const role = AuthService.currentUser.role;
+          // 1. Cost Visibility (Dashboard, Product List)
           const canSeeCost = AuthService.canSeeCost();
-
-          // 1. Hide/Show Cost Elements
           document.querySelectorAll(".restricted-view").forEach((el) => {
-            if (!canSeeCost) el.classList.add("hidden");
-            else el.classList.remove("hidden");
+            el.classList.toggle("hidden", !canSeeCost);
           });
-
-          // Table Headers for Cost
           document.querySelectorAll(".restricted-view-head").forEach((el) => {
             el.style.display = canSeeCost ? "table-cell" : "none";
           });
 
-          // Add Product Button (Only Owner/Warehouse)
+          // 2. Product Add Button
           const btnAddProd = document.getElementById("btn-add-product");
-          if (role === "SALES") btnAddProd.classList.add("hidden");
-          else btnAddProd.classList.remove("hidden");
+          if (AuthService.canAddProduct())
+            btnAddProd.classList.remove("hidden");
+          else btnAddProd.classList.add("hidden");
 
-          // Export Button (Only Owner)
+          // 3. Export Button (Only Owner)
           const btnExport = document.getElementById("btn-export-excel");
-          if (role !== "OWNER") btnExport.classList.add("hidden");
-          else btnExport.classList.remove("hidden");
+          if (AuthService.currentUser.role === "OWNER")
+            btnExport.classList.remove("hidden");
+          else btnExport.classList.add("hidden");
         },
 
         navigate: (viewId) => {
@@ -1550,6 +1600,9 @@
           const tbody = document.getElementById("product-list-body");
           const canSeeCost = AuthService.canSeeCost();
 
+          const canEdit = AuthService.canEditProduct();
+          const canDelete = AuthService.canDeleteProduct();
+
           tbody.innerHTML = products.length
             ? products
                 .map(
@@ -1573,12 +1626,19 @@
                         }">${p.quantity} ${p.unit}</span></td>
                         <td class="p-4 text-center">
                             ${
-                              AuthService.currentUser.role !== "SALES"
-                                ? `
-                            <button onclick="ProductController.edit('${p.id}')" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fas fa-edit"></i></button>
-                            <button onclick="ProductController.delete('${p.id}')" class="text-red-400 hover:text-red-600 mx-1"><i class="fas fa-trash"></i></button>
-                            `
-                                : '<span class="text-gray-400 text-xs">Chỉ xem</span>'
+                              canEdit
+                                ? `<button onclick="ProductController.edit('${p.id}')" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fas fa-edit"></i></button>`
+                                : ""
+                            }
+                            ${
+                              canDelete
+                                ? `<button onclick="ProductController.delete('${p.id}')" class="text-red-400 hover:text-red-600 mx-1"><i class="fas fa-trash"></i></button>`
+                                : ""
+                            }
+                            ${
+                              !canEdit && !canDelete
+                                ? '<span class="text-gray-400 text-xs">Chỉ xem</span>'
+                                : ""
                             }
                         </td>
                     </tr>
