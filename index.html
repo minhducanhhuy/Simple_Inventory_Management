@@ -358,7 +358,10 @@
           color: "bg-purple-100 text-purple-700",
         },
         MANAGER: { label: "Quản Lý", color: "bg-blue-100 text-blue-700" },
-        STAFF: { label: "Nhân Viên", color: "bg-slate-100 text-slate-700" },
+        STAFF: {
+          label: "Nhân Viên Thủ kho",
+          color: "bg-slate-100 text-slate-700",
+        },
       };
 
       const TX_TYPES = {
@@ -375,13 +378,13 @@
           sign: -1,
         },
         RETURN: {
-          label: "Trả Hàng",
+          label: "Khách Trả",
           color: "text-purple-600",
           bg: "bg-purple-100",
           sign: 1,
         },
         DAMAGE: {
-          label: "Hủy Hàng",
+          label: "Hủy / Thanh Lý",
           color: "text-rose-600",
           bg: "bg-rose-100",
           sign: -1,
@@ -392,6 +395,19 @@
           bg: "bg-amber-100",
           sign: 0,
         },
+        // Mới thêm
+        TRANSFER: {
+          label: "Chuyển Kho",
+          color: "text-indigo-600",
+          bg: "bg-indigo-100",
+          sign: -1,
+        }, // US08
+        RETURN_SUPPLIER: {
+          label: "Trả Hàng NCC",
+          color: "text-orange-600",
+          bg: "bg-orange-100",
+          sign: -1,
+        }, // US16
       };
 
       /** * =================================================================
@@ -418,6 +434,13 @@
               active: true,
             },
           ];
+
+          // US12, US13, US14: Khởi tạo dữ liệu đối tác
+          this.suppliers =
+            JSON.parse(localStorage.getItem("ims_suppliers")) || [];
+          this.customers =
+            JSON.parse(localStorage.getItem("ims_customers")) || [];
+
           this.settings = JSON.parse(localStorage.getItem("ims_settings")) || {
             categories: [
               "Điện Tử",
@@ -427,6 +450,7 @@
               "Khác",
             ],
             units: ["Cái", "Hộp", "Thùng", "Kg", "Bộ"],
+            branches: ["Chi nhánh chính", "Kho Phụ A", "Cửa hàng Quận 1"], // Cho US08
           };
         }
 
@@ -435,6 +459,18 @@
             localStorage.setItem("ims_users", JSON.stringify(this.users));
           else if (key === "settings")
             localStorage.setItem("ims_settings", JSON.stringify(this.settings));
+          else if (key === "suppliers")
+            localStorage.setItem(
+              "ims_suppliers",
+              JSON.stringify(this.suppliers)
+            );
+          // Save NCC
+          else if (key === "customers")
+            localStorage.setItem(
+              "ims_customers",
+              JSON.stringify(this.customers)
+            );
+          // Save Khách
           else {
             localStorage.setItem("ims_products", JSON.stringify(this.products));
             localStorage.setItem(
@@ -447,6 +483,26 @@
         reset() {
           localStorage.clear();
           location.reload();
+        }
+
+        // --- SUPPLIER & CUSTOMER METHODS ---
+        addPartner(type, data) {
+          // type: 'suppliers' or 'customers'
+          const id = UTILS.generateId(type === "suppliers" ? "SUP" : "CUS");
+          const newPartner = { id, ...data, debt: 0, totalSpent: 0 };
+          this[type].push(newPartner);
+          this.save(type);
+          return newPartner;
+        }
+
+        updatePartnerDebt(type, id, amount) {
+          const p = this[type].find((x) => x.id === id);
+          if (p) {
+            p.debt = (p.debt || 0) + amount; // US13: Cộng nợ
+            if (type === "customers")
+              p.totalSpent = (p.totalSpent || 0) + Math.abs(amount);
+            this.save(type);
+          }
         }
 
         // --- PRODUCT METHODS ---
@@ -494,43 +550,104 @@
 
         // --- TRANSACTION METHODS ---
         addTransaction(type, items, meta = {}) {
-          if (["EXPORT", "DAMAGE"].includes(type)) {
-            items.forEach((item) => {
-              const p = this.getProduct(item.productId);
-              if (p.currentStock < item.quantity)
-                throw new Error(
-                  `SP ${p.name} không đủ tồn kho (Còn: ${p.currentStock})`
-                );
-            });
+          // 1. Xác định trạng thái
+          const isStaffDamage = meta.role === "STAFF" && type === "DAMAGE";
+          const status = isStaffDamage ? "PENDING" : "COMPLETED";
+
+          // 2. Chỉ trừ kho nếu KHÔNG PHẢI là phiếu chờ duyệt
+          if (status === "COMPLETED") {
+            if (["EXPORT", "DAMAGE"].includes(type)) {
+              items.forEach((item) => {
+                const p = this.getProduct(item.productId);
+                if (p.currentStock < item.quantity)
+                  throw new Error(
+                    `SP ${p.name} không đủ tồn kho (Còn: ${p.currentStock})`
+                  );
+              });
+            }
           }
 
           const txId = UTILS.generateId("TX");
+          const totalValue = items.reduce(
+            (sum, i) => sum + i.price * i.quantity,
+            0
+          );
+
           const transaction = {
             id: txId,
             type,
+            status: meta.status || "COMPLETED", // Status có thể truyền từ App
             date: new Date().toISOString(),
-            items: items.map((i) => ({ ...i })), // Deep copy items
-            totalValue: items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+            items: items.map((i) => ({ ...i })),
+            totalValue: totalValue,
             reason: meta.reason || "",
             createdBy: meta.user || "System",
+
+            // Lưu thêm thông tin mở rộng
+            supplierId: meta.supplierId || null, // US13
+            customerId: meta.customerId || null, // US14
+            targetLocation: meta.targetLocation || null, // US08
           };
 
-          items.forEach((item) => {
-            const p = this.getProduct(item.productId);
-            let change = 0;
-            if (type === "STOCKTAKE") change = item.quantity - p.currentStock;
-            else change = item.quantity * TX_TYPES[type].sign;
+          // LOGIC CẬP NHẬT KHO & CÔNG NỢ (Chỉ chạy khi status Completed)
+          if (transaction.status === "COMPLETED") {
+            // 1. Trừ/Cộng kho
+            items.forEach((item) => {
+              const p = this.getProduct(item.productId);
+              let change = 0;
+              if (type === "STOCKTAKE") change = item.quantity - p.currentStock;
+              else change = item.quantity * TX_TYPES[type].sign;
 
-            p.currentStock += change;
-            item.snapshotStock = p.currentStock;
-            item.change = change;
-          });
+              p.currentStock += change;
+              item.snapshotStock = p.currentStock;
+              item.change = change;
+            });
+
+            // 2. Xử lý Công nợ NCC (US13, US16)
+            if (meta.supplierId) {
+              // Nhập hàng: Tăng nợ | Trả hàng NCC: Giảm nợ
+              const debtChange =
+                type === "IMPORT"
+                  ? totalValue
+                  : type === "RETURN_SUPPLIER"
+                  ? -totalValue
+                  : 0;
+              this.updatePartnerDebt("suppliers", meta.supplierId, debtChange);
+            }
+
+            // 3. Xử lý Khách hàng (US14)
+            if (meta.customerId && type === "EXPORT") {
+              this.updatePartnerDebt("customers", meta.customerId, totalValue);
+            }
+          }
 
           this.transactions.unshift(transaction);
           this.save();
           return transaction;
         }
 
+        // Thêm hàm duyệt mới trong Database
+        approveTransaction(txId) {
+          const tx = this.transactions.find((t) => t.id === txId);
+          if (!tx || tx.status !== "PENDING")
+            throw new Error("Giao dịch không hợp lệ");
+
+          // Thực hiện trừ kho bù
+          tx.items.forEach((item) => {
+            const p = this.getProduct(item.productId);
+            // Kiểm tra lại tồn kho
+            if (p.currentStock < item.quantity)
+              throw new Error(`SP ${p.name} không đủ để duyệt hủy!`);
+
+            const change = item.quantity * -1; // DAMAGE luôn là trừ
+            p.currentStock += change;
+            item.snapshotStock = p.currentStock;
+            item.change = change;
+          });
+
+          tx.status = "COMPLETED";
+          this.save();
+        }
         // --- USER & SETTINGS METHODS ---
         getUser(username) {
           return this.users.find((u) => u.username === username);
@@ -710,6 +827,35 @@
           this._addSidebarItem(menu, "IMPORT", "fa-dolly", "Nhập kho");
           this._addSidebarItem(menu, "EXPORT", "fa-cart-shopping", "Xuất bán");
 
+          // Sau mục "Quản lý kho", thêm:
+          this._addSidebarHeader(menu, "Đối tác (US12,13,14)", "mt-6");
+          this._addSidebarItem(
+            menu,
+            "SUPPLIERS",
+            "fa-truck-field",
+            "Nhà cung cấp"
+          );
+          this._addSidebarItem(
+            menu,
+            "CUSTOMERS",
+            "fa-users-line",
+            "Khách hàng"
+          );
+
+          // Trong mục "Vận hành", thêm:
+          this._addSidebarItem(
+            menu,
+            "TRANSFER",
+            "fa-truck-arrow-right",
+            "Chuyển kho"
+          ); // US08
+          this._addSidebarItem(
+            menu,
+            "RETURN_SUPPLIER",
+            "fa-reply-all",
+            "Trả NCC"
+          ); // US16
+
           // 3. Vận hành
           this._addSidebarHeader(menu, "Vận hành", "mt-6");
           this._addSidebarItem(
@@ -801,6 +947,19 @@
             case "USERS":
               title.innerText = "Quản lý nhân viên";
               this.renderUsers(container);
+              break;
+
+            case "SUPPLIERS":
+            case "CUSTOMERS":
+              this.renderPartners(
+                container,
+                view === "SUPPLIERS" ? "suppliers" : "customers"
+              );
+              break;
+            case "TRANSFER":
+            case "RETURN_SUPPLIER":
+              title.innerText = TX_TYPES[view].label;
+              this.renderTransactionForm(container, view);
               break;
             case "SETTINGS":
               title.innerText = "Cấu hình hệ thống";
@@ -1306,88 +1465,158 @@
           const config = TX_TYPES[type];
           const products = this.db.getProducts();
 
+          // --- PHẦN LOGIC MỚI: Xây dựng các ô nhập liệu động ---
+          let extraFieldsHTML = "";
+
+          // 1. Nếu là Nhập kho hoặc Trả hàng NCC -> Hiện chọn Nhà Cung Cấp (US12, US13, US16)
+          if (["IMPORT", "RETURN_SUPPLIER"].includes(type)) {
+            const suppliers = this.db.suppliers || [];
+            extraFieldsHTML += `
+            <div class="mb-3">
+                <div class="text-xs font-bold text-slate-500 uppercase mb-1">Nhà cung cấp (US12,13)</div>
+                <select id="txPartner" class="w-full text-sm border border-slate-300 rounded p-2 focus:ring-2 focus:ring-brand-500 outline-none">
+                    <option value="">-- Khách lẻ / Vãng lai --</option>
+                    ${suppliers
+                      .map((s) => `<option value="${s.id}">${s.name}</option>`)
+                      .join("")}
+                </select>
+            </div>
+        `;
+          }
+
+          // 2. Nếu là Xuất bán -> Hiện chọn Khách Hàng (US14)
+          if (type === "EXPORT") {
+            const customers = this.db.customers || [];
+            extraFieldsHTML += `
+            <div class="mb-3">
+                <div class="text-xs font-bold text-slate-500 uppercase mb-1">Khách hàng (US14)</div>
+                <div class="flex gap-2">
+                    <select id="txPartner" class="w-full text-sm border border-slate-300 rounded p-2 focus:ring-2 focus:ring-brand-500 outline-none">
+                        <option value="">-- Khách lẻ --</option>
+                        ${customers
+                          .map(
+                            (c) =>
+                              `<option value="${c.id}">${c.name} - ${c.phone}</option>`
+                          )
+                          .join("")}
+                    </select>
+                    <button onclick="app.openPartnerModal('customers')" class="bg-brand-100 text-brand-600 px-3 rounded hover:bg-brand-200" title="Thêm khách hàng mới">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+          }
+
+          // 3. Nếu là Chuyển kho -> Hiện chọn Kho đích (US08)
+          if (type === "TRANSFER") {
+            const branches = this.db.settings.branches || [
+              "Kho B",
+              "Chi nhánh 1",
+            ];
+            extraFieldsHTML += `
+            <div class="mb-3">
+                <div class="text-xs font-bold text-slate-500 uppercase mb-1">Chuyển đến kho (US08) <span class="text-red-500">*</span></div>
+                <select id="txLocation" class="w-full text-sm border border-indigo-300 bg-indigo-50 rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    ${branches
+                      .map((b) => `<option value="${b}">${b}</option>`)
+                      .join("")}
+                </select>
+            </div>
+        `;
+          }
+
+          // 4. Ô nhập Lý do / Ghi chú (Chung cho tất cả, riêng DAMAGE có select list)
+          let reasonInputHTML = "";
+          if (type === "DAMAGE") {
+            reasonInputHTML = `
+            <div class="text-xs font-bold text-slate-500 uppercase mb-1">Lý do hủy (US07) <span class="text-red-500">*</span></div>
+            <select id="txReason" class="w-full text-sm border rounded p-2 focus:ring-2 focus:ring-rose-500 outline-none">
+                <option value="">-- Chọn lý do --</option>
+                <option value="Hết hạn sử dụng">Hết hạn sử dụng</option>
+                <option value="Hư hỏng/Vỡ">Hư hỏng/Vỡ</option>
+                <option value="Lỗi sản xuất">Lỗi sản xuất</option>
+                <option value="Thanh lý">Thanh lý</option>
+                <option value="Khác">Khác</option>
+            </select>`;
+          } else {
+            reasonInputHTML = `
+            <div class="text-xs font-bold text-slate-500 uppercase mb-1">Ghi chú / Lý do</div>
+            <input type="text" id="txReason" placeholder="Nhập ghi chú..." class="w-full text-sm border border-slate-300 rounded p-2 focus:ring-2 focus:ring-brand-500 outline-none">`;
+          }
+
+          // --- KẾT THÚC LOGIC MỚI ---
+
           container.innerHTML = `
-            <div class="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] fade-in">
-              <!-- Left: Product Selector -->
-              <div class="lg:w-2/3 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 border-b border-slate-100 bg-slate-50">
-                  <input type="text" id="txSearch" placeholder="Tìm kiếm sản phẩm để thêm..." 
-                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-brand-500 outline-none">
-                </div>
-                <div id="txProductGrid" class="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
-                  ${products
-                    .map(
-                      (p) => `
-                    <div onclick="app.addToCart('${
-                      p.id
-                    }', '${type}')" class="group bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-brand-500 hover:shadow-md transition relative overflow-hidden select-none">
-                      <div class="text-sm font-bold text-slate-800 truncate mb-1" title="${
-                        p.name
-                      }">${p.name}</div>
-                      <div class="flex justify-between items-end">
-                        <div class="text-xs text-slate-500 font-mono">${
-                          p.sku
-                        }</div>
-                        <div class="text-xs font-bold ${
-                          p.currentStock <= 0
-                            ? "text-rose-500"
-                            : "text-emerald-600"
-                        }">Kho: ${p.currentStock}</div>
-                      </div>
-                      <div class="absolute inset-0 bg-brand-50/20 hidden group-active:block"></div>
-                    </div>
-                  `
-                    )
-                    .join("")}
-                </div>
+    <div class="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] fade-in">
+      <div class="lg:w-2/3 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-100 bg-slate-50">
+          <input type="text" id="txSearch" placeholder="Tìm kiếm sản phẩm để thêm..." 
+            class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-brand-500 outline-none">
+        </div>
+        <div id="txProductGrid" class="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
+          ${products
+            .map(
+              (p) => `
+            <div onclick="app.addToCart('${
+              p.id
+            }', '${type}')" class="group bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-brand-500 hover:shadow-md transition relative overflow-hidden select-none">
+              <div class="text-sm font-bold text-slate-800 truncate mb-1" title="${
+                p.name
+              }">${p.name}</div>
+              <div class="flex justify-between items-end">
+                <div class="text-xs text-slate-500 font-mono">${p.sku}</div>
+                <div class="text-xs font-bold ${
+                  p.currentStock <= 0 ? "text-rose-500" : "text-emerald-600"
+                }">Kho: ${p.currentStock}</div>
               </div>
+              <div class="absolute inset-0 bg-brand-50/20 hidden group-active:block"></div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
 
-              <!-- Right: Cart & Submit -->
-              <div class="lg:w-1/3 flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
-                <div class="p-4 ${
-                  config.bg
-                } border-b border-slate-100 flex items-center justify-between">
-                  <h3 class="font-bold ${
-                    config.color
-                  }"><i class="fa-solid fa-file-pen mr-2"></i>Phiếu ${
-            config.label
-          }</h3>
-                  <span class="text-xs bg-white px-2 py-1 rounded border border-slate-200">${new Date().toLocaleDateString()}</span>
-                </div>
-                
-                <div class="p-4 space-y-3 bg-slate-50 border-b border-slate-200">
-                  ${
-                    type === "DAMAGE"
-                      ? `<div class="text-xs font-bold text-slate-500 uppercase mb-1">Lý do hủy (US07, US17) <span class="text-red-500">*</span></div>
-                     <select id="txReason" class="w-full text-sm border rounded p-2"><option value="">-- Chọn lý do --</option><option>Hư hỏng</option><option>Hết hạn</option><option>Lỗi SX</option><option>Khác</option></select>`
-                      : `<input type="text" id="txReason" placeholder="Ghi chú / Lý do (US07)..." class="w-full text-sm border rounded p-2">`
-                  }
-                </div>
+      <div class="lg:w-1/3 flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+        <div class="p-4 ${
+          config.bg
+        } border-b border-slate-100 flex items-center justify-between">
+          <h3 class="font-bold ${
+            config.color
+          }"><i class="fa-solid fa-file-pen mr-2"></i>Phiếu ${config.label}</h3>
+          <span class="text-xs bg-white px-2 py-1 rounded border border-slate-200">${new Date().toLocaleDateString()}</span>
+        </div>
+        
+        <div class="p-4 bg-slate-50 border-b border-slate-200">
+             ${extraFieldsHTML}
+             ${reasonInputHTML}
+        </div>
+        <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2">
+          <div class="text-center text-slate-400 py-10 flex flex-col items-center">
+            <i class="fa-solid fa-basket-shopping text-3xl mb-2 opacity-50"></i>
+            <p>Chưa chọn sản phẩm</p>
+          </div>
+        </div>
 
-                <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2">
-                  <div class="text-center text-slate-400 py-10 flex flex-col items-center">
-                    <i class="fa-solid fa-basket-shopping text-3xl mb-2 opacity-50"></i>
-                    <p>Chưa chọn sản phẩm</p>
-                  </div>
-                </div>
-
-                <div class="p-4 bg-slate-50 border-t border-slate-200">
-                  <div class="flex justify-between items-center mb-4">
-                    <span class="text-slate-500 font-medium">Tổng giá trị</span>
-                    <span id="cartTotal" class="text-xl font-bold text-slate-800">0 ₫</span>
-                  </div>
-                  <button onclick="app.submitTransaction('${type}')" class="w-full py-3 rounded-lg font-bold text-white shadow-lg transition transform active:scale-95 ${
+        <div class="p-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-slate-500 font-medium">Tổng giá trị</span>
+            <span id="cartTotal" class="text-xl font-bold text-slate-800">0 ₫</span>
+          </div>
+          <button onclick="app.submitTransaction('${type}')" class="w-full py-3 rounded-lg font-bold text-white shadow-lg transition transform active:scale-95 ${
             type === "DAMAGE"
               ? "bg-rose-600 hover:bg-rose-700"
               : "bg-brand-600 hover:bg-brand-700"
           }">
-                    Hoàn Tất
-                  </button>
-                </div>
-              </div>
-            </div>
-          `;
+            Hoàn Tất
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 
+          // Giữ nguyên logic Search
           document.getElementById("txSearch").addEventListener("input", (e) => {
             const kw = e.target.value.toLowerCase();
             document
@@ -1484,19 +1713,41 @@
         submitTransaction(type) {
           if (!this.cart.length)
             return UTILS.showToast("Giỏ hàng trống!", "warning");
+
           const reason = document.getElementById("txReason").value;
-          if (type === "DAMAGE" && !reason)
-            return UTILS.showToast(
-              "Vui lòng chọn lý do hủy hàng (US07)",
-              "error"
-            );
+          const partnerEl = document.getElementById("txPartner");
+          const locationEl = document.getElementById("txLocation");
+
+          const meta = {
+            reason,
+            user: this.currentUser.fullname,
+            role: this.currentUser.role,
+            supplierId:
+              ["IMPORT", "RETURN_SUPPLIER"].includes(type) && partnerEl
+                ? partnerEl.value
+                : null,
+            customerId: type === "EXPORT" && partnerEl ? partnerEl.value : null,
+            targetLocation:
+              type === "TRANSFER" && locationEl ? locationEl.value : null,
+          };
 
           try {
             this.db.addTransaction(type, this.cart, {
               reason,
               user: this.currentUser.fullname,
+              role: this.currentUser.role, // <--- Thêm dòng này
             });
-            UTILS.showToast("Giao dịch thành công!");
+
+            // Thông báo khác nhau tùy role
+            if (this.currentUser.role === "STAFF" && type === "DAMAGE") {
+              UTILS.showToast(
+                "Đã gửi yêu cầu hủy hàng. Chờ quản lý duyệt!",
+                "info"
+              );
+            } else {
+              UTILS.showToast("Giao dịch thành công!");
+            }
+
             this.cart = [];
             this.navigate("DASHBOARD");
           } catch (e) {
@@ -1556,6 +1807,17 @@
           }`;
         }
 
+        handleApprove(txId) {
+          if (!confirm("Xác nhận duyệt phiếu hủy này và trừ tồn kho?")) return;
+          try {
+            this.db.approveTransaction(txId);
+            UTILS.showToast("Đã duyệt phiếu thành công!");
+            this.renderReport(document.getElementById("viewContainer")); // Load lại bảng
+          } catch (e) {
+            UTILS.showToast(e.message, "error");
+          }
+        }
+
         submitStocktake() {
           if (!confirm("Xác nhận chốt số liệu kiểm kê?")) return;
           const adjustments = [];
@@ -1598,33 +1860,41 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-sm">
                       ${txs
-                        .map(
-                          (t) => `
-                        <tr class="hover:bg-slate-50">
-                          <td class="p-4 font-mono text-slate-500 text-xs">${
-                            t.id
-                          }</td>
-                          <td class="p-4">${UTILS.formatDate(t.date)}</td>
-                          <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
-                            TX_TYPES[t.type].bg
-                          } ${TX_TYPES[t.type].color}">${
-                            TX_TYPES[t.type].label
-                          }</span></td>
-                          <td class="p-4 text-slate-600">${
-                            t.createdBy || "System"
-                          }</td>
-                          <td class="p-4 text-slate-500 italic truncate max-w-xs">${
-                            t.reason || "-"
-                          }</td>
-                          <td class="p-4 text-right font-medium">${UTILS.formatCurrency(
-                            t.totalValue
-                          )}</td>
-                          <td class="p-4 text-center"><button onclick="app.showTransactionDetail('${
-                            t.id
-                          }')" class="text-brand-600 hover:underline text-xs">Xem</button></td>
-                        </tr>
-                      `
-                        )
+                        .map((t) => {
+                          // Logic màu sắc trạng thái
+                          const statusLabel =
+                            t.status === "PENDING"
+                              ? '<span class="text-orange-600 bg-orange-100 px-2 py-1 rounded text-xs font-bold">Chờ duyệt</span>'
+                              : '<span class="text-green-600 bg-green-100 px-2 py-1 rounded text-xs font-bold">Đã duyệt</span>';
+
+                          // Logic nút bấm (Chỉ hiện nếu Pending và User là Admin)
+                          const actionBtn =
+                            t.status === "PENDING" &&
+                            this.currentUser.role === "ADMIN"
+                              ? `<button onclick="app.handleApprove('${t.id}')" class="bg-brand-600 text-white px-2 py-1 rounded text-xs hover:bg-brand-700">Duyệt ngay</button>`
+                              : `<button onclick="app.showTransactionDetail('${t.id}')" class="text-brand-600 hover:underline text-xs">Xem</button>`;
+
+                          return `
+    <tr class="hover:bg-slate-50">
+      <td class="p-4 font-mono text-slate-500 text-xs">${t.id}</td>
+      <td class="p-4">
+        <div>${UTILS.formatDate(t.date)}</div>
+        <div class="mt-1">${statusLabel}</div> </td>
+      <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
+        TX_TYPES[t.type].bg
+      } ${TX_TYPES[t.type].color}">${TX_TYPES[t.type].label}</span></td>
+      <td class="p-4 text-slate-600">${t.createdBy || "System"}</td>
+      <td class="p-4 text-slate-500 italic truncate max-w-xs">${
+        t.reason || "-"
+      }</td>
+      <td class="p-4 text-right font-medium">${UTILS.formatCurrency(
+        t.totalValue
+      )}</td>
+      <td class="p-4 text-center">
+         ${actionBtn} </td>
+    </tr>
+  `;
+                        })
                         .join("")}
                     </tbody>
                  </table>
@@ -1927,6 +2197,82 @@
           overlay.classList.add("opacity-0");
           content.classList.add("opacity-0", "scale-95");
           setTimeout(() => overlay.classList.add("hidden"), 200);
+        }
+
+        renderPartners(container, type) {
+          // type: 'suppliers' or 'customers'
+          const title = type === "suppliers" ? "Nhà Cung Cấp" : "Khách Hàng";
+          const data = this.db[type];
+
+          container.innerHTML = `
+        <div class="flex justify-between items-center mb-6 fade-in">
+            <h3 class="font-bold text-slate-700">Quản lý ${title}</h3>
+            <button onclick="app.openPartnerModal('${type}')" class="bg-brand-600 text-white px-4 py-2 rounded-lg shadow hover:bg-brand-700"><i class="fa-solid fa-plus mr-2"></i> Thêm mới</button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 font-bold text-slate-500 border-b">
+                    <tr><th class="p-4">Tên</th><th class="p-4">SĐT</th><th class="p-4">Địa chỉ</th><th class="p-4 text-right">${
+                      type === "suppliers" ? "Công nợ (Phải trả)" : "Tổng mua"
+                    }</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${data
+                      .map(
+                        (p) => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-4 font-bold text-slate-700">${
+                              p.name
+                            }</td>
+                            <td class="p-4 text-slate-500">${p.phone}</td>
+                            <td class="p-4 text-slate-500">${p.address}</td>
+                            <td class="p-4 text-right font-bold ${
+                              type === "suppliers"
+                                ? "text-rose-600"
+                                : "text-emerald-600"
+                            }">
+                                ${UTILS.formatCurrency(
+                                  type === "suppliers" ? p.debt : p.totalSpent
+                                )}
+                            </td>
+                        </tr>
+                    `
+                      )
+                      .join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+        }
+
+        openPartnerModal(type) {
+          const title =
+            type === "suppliers" ? "Thêm Nhà Cung Cấp" : "Thêm Khách Hàng";
+          const overlay = document.getElementById("modalOverlay");
+          const content = document.getElementById("modalContent");
+
+          content.innerHTML = `
+        <div class="p-6 border-b flex justify-between items-center">
+            <h3 class="font-bold text-lg">${title}</h3>
+            <button onclick="app.closeModal()"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <form id="partnerForm" class="p-6 space-y-4">
+            <input name="name" placeholder="Tên đơn vị / Khách hàng *" class="w-full border rounded p-2" required>
+            <input name="phone" placeholder="Số điện thoại" class="w-full border rounded p-2">
+            <input name="address" placeholder="Địa chỉ" class="w-full border rounded p-2">
+            <button type="submit" class="w-full bg-brand-600 text-white font-bold py-2 rounded">Lưu thông tin</button>
+        </form>
+    `;
+          this._showModal(overlay, content);
+
+          document.getElementById("partnerForm").onsubmit = (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            this.db.addPartner(type, Object.fromEntries(fd));
+            UTILS.showToast("Thêm thành công");
+            this.closeModal();
+            this.navigate(type === "suppliers" ? "SUPPLIERS" : "CUSTOMERS");
+          };
         }
       }
 
