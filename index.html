@@ -3,646 +3,1028 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hệ Thống Quản Lý Kho & Bán Hàng (IMS PoC)</title>
+    <title>IMS Enterprise - Hệ Thống Quản Lý Kho</title>
 
-    <!-- TailwindCSS CDN -->
+    <!-- TailwindCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- FontAwesome for Icons -->
+    <!-- FontAwesome -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
 
-    <!-- Chart.js for Dashboard -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- Custom Config -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+                800: "#1e40af",
+                900: "#1e3a8a",
+                950: "#172554",
+              },
+            },
+          },
+        },
+      };
+    </script>
+
     <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f1f1;
+        background: #f1f5f9;
       }
       ::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 4px;
+        background: #cbd5e1;
+        border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #555;
+        background: #94a3b8;
       }
 
-      /* Toast Notification Animation */
-      @keyframes slideIn {
+      /* Animation classes */
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      @keyframes fadeIn {
         from {
-          transform: translateX(100%);
           opacity: 0;
         }
         to {
-          transform: translateX(0);
           opacity: 1;
         }
       }
-      .toast-enter {
-        animation: slideIn 0.3s ease-out forwards;
+
+      .slide-in-right {
+        animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+        }
+        to {
+          transform: translateX(0);
+        }
       }
 
-      /* Table Sticky Header */
+      /* Sticky Table Header */
       .table-sticky th {
         position: sticky;
         top: 0;
         z-index: 10;
+        background-color: #f8fafc;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Login Background */
+      .login-bg {
+        background-color: #f8fafc;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%233b82f6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
       }
     </style>
   </head>
-  <body
-    class="bg-gray-100 font-sans text-gray-800 h-screen overflow-hidden flex"
-  >
-    <!-- SIDEBAR -->
-    <aside
-      class="w-64 bg-slate-900 text-white flex flex-col transition-all duration-300"
-      id="sidebar"
+  <body class="bg-slate-50 text-slate-800 h-screen overflow-hidden">
+    <!-- LOGIN SCREEN -->
+    <div
+      id="loginScreen"
+      class="fixed inset-0 z-[100] login-bg flex items-center justify-center hidden"
     >
       <div
-        class="h-16 flex items-center justify-center border-b border-slate-700"
+        class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-100"
       >
-        <h1 class="text-xl font-bold tracking-wider">
-          <i class="fa-solid fa-boxes-stacked mr-2"></i>IMS PRO
-        </h1>
-      </div>
-
-      <nav class="flex-1 overflow-y-auto py-4">
-        <ul class="space-y-1 px-2" id="navMenu">
-          <!-- Menu items will be injected by JS based on Role -->
-        </ul>
-      </nav>
-
-      <div class="p-4 border-t border-slate-700 text-xs text-slate-400">
-        <p>Version 1.0.0 (PoC)</p>
-        <p>&copy; 2026 IMS Corp</p>
-      </div>
-    </aside>
-
-    <!-- MAIN CONTENT -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden">
-      <!-- TOP HEADER -->
-      <header
-        class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-20"
-      >
-        <!-- Global Search -->
-        <div class="flex items-center bg-gray-100 rounded-lg px-3 py-2 w-96">
-          <i class="fa-solid fa-search text-gray-400"></i>
-          <input
-            type="text"
-            id="globalSearch"
-            placeholder="Tìm sản phẩm, mã phiếu (Ctrl+K)..."
-            class="bg-transparent border-none outline-none ml-2 w-full text-sm"
-          />
-        </div>
-
-        <div class="flex items-center gap-4">
-          <!-- Role Switcher -->
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-gray-500">Vai trò:</span>
-            <select
-              id="roleSwitcher"
-              class="border border-gray-300 rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="OWNER">Chủ cửa hàng</option>
-              <option value="MANAGER">Quản lý</option>
-              <option value="SALES">Nhân viên Bán hàng</option>
-              <option value="WAREHOUSE">Nhân viên Kho</option>
-            </select>
-          </div>
-
-          <!-- Mock Data Button -->
-          <button
-            onclick="app.generateMockData()"
-            class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded hover:bg-indigo-200 transition"
-            title="Xóa dữ liệu cũ và tạo mới"
-          >
-            <i class="fa-solid fa-database mr-1"></i> Reset Data
-          </button>
-
-          <!-- User Profile -->
+        <div class="text-center mb-8">
           <div
-            class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold cursor-pointer"
+            class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-100 text-brand-600 mb-4"
           >
-            A
+            <i class="fa-solid fa-cube text-3xl"></i>
           </div>
+          <h1 class="text-2xl font-bold text-slate-800">IMS Enterprise</h1>
+          <p class="text-slate-500 text-sm mt-1">Đăng nhập để tiếp tục</p>
         </div>
-      </header>
-
-      <!-- DYNAMIC CONTENT AREA -->
-      <div id="contentArea" class="flex-1 overflow-y-auto p-6 relative">
-        <!-- Views will be rendered here -->
-      </div>
-    </main>
-
-    <!-- TOAST NOTIFICATION CONTAINER -->
-    <div
-      id="toastContainer"
-      class="fixed top-5 right-5 z-50 flex flex-col gap-2"
-    ></div>
-
-    <!-- MODAL CONTAINER (Hidden by default) -->
-    <div
-      id="modalBackdrop"
-      class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-40 transition-opacity"
-    >
-      <div
-        id="modalContent"
-        class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all scale-95 opacity-0"
-      >
-        <!-- Modal body injected here -->
+        <form onsubmit="app.login(event)" class="space-y-5">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1"
+              >Tên đăng nhập</label
+            >
+            <input
+              type="text"
+              name="username"
+              class="w-full border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+              placeholder="admin"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1"
+              >Mật khẩu</label
+            >
+            <input
+              type="password"
+              name="password"
+              class="w-full border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+              placeholder="••••••"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            class="w-full bg-brand-600 text-white font-bold py-3 rounded-lg hover:bg-brand-700 transition shadow-lg transform active:scale-95"
+          >
+            Đăng Nhập
+          </button>
+        </form>
+        <div class="mt-6 text-center text-xs text-slate-400">
+          Default: admin / 123456
+        </div>
       </div>
     </div>
 
+    <!-- MAIN APP LAYOUT (Hidden until login) -->
+    <div id="appLayout" class="flex h-full hidden">
+      <!-- SIDEBAR NAVIGATION -->
+      <aside
+        class="w-64 bg-brand-950 text-white flex flex-col shadow-2xl z-20 transition-all duration-300 flex-shrink-0"
+      >
+        <div
+          class="h-16 flex items-center px-6 border-b border-brand-800 bg-brand-950"
+        >
+          <i class="fa-solid fa-cube text-brand-400 text-xl mr-3"></i>
+          <h1 class="text-xl font-bold tracking-wide">IMS CORE</h1>
+        </div>
+
+        <div
+          class="flex-1 overflow-y-auto py-6 px-3 space-y-1"
+          id="sidebarMenu"
+        >
+          <!-- Menu items injected via JS -->
+        </div>
+
+        <div class="p-4 border-t border-brand-800 bg-brand-950">
+          <div class="flex items-center gap-3 mb-3 px-2">
+            <div
+              class="w-8 h-8 rounded-full bg-brand-700 flex items-center justify-center font-bold text-xs"
+              id="userAvatar"
+            >
+              AD
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-bold truncate" id="userNameDisplay">
+                Admin
+              </div>
+              <div class="text-xs text-brand-400 truncate" id="userRoleDisplay">
+                Administrator
+              </div>
+            </div>
+          </div>
+          <button
+            onclick="app.logout()"
+            class="w-full py-2 text-xs text-brand-300 hover:text-white hover:bg-brand-800 rounded transition flex items-center justify-center gap-2"
+          >
+            <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+          </button>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT AREA -->
+      <main class="flex-1 flex flex-col min-w-0 bg-slate-50">
+        <!-- TOP HEADER -->
+        <header
+          class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10"
+        >
+          <h2 id="pageTitle" class="text-xl font-bold text-slate-800">
+            Tổng quan
+          </h2>
+
+          <div class="flex items-center gap-4">
+            <!-- Global Search -->
+            <div class="relative group">
+              <div
+                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+              >
+                <i
+                  class="fa-solid fa-search text-slate-400 group-focus-within:text-brand-500"
+                ></i>
+              </div>
+              <input
+                type="text"
+                id="globalSearch"
+                placeholder="Tìm kiếm nhanh (Ctrl+K)"
+                class="bg-slate-100 border-none rounded-full py-2 pl-10 pr-4 text-sm w-64 focus:ring-2 focus:ring-brand-500 transition-all focus:w-80 outline-none"
+              />
+            </div>
+
+            <!-- Actions -->
+            <div class="relative group">
+              <button
+                class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition"
+              >
+                <i class="fa-solid fa-gear"></i>
+              </button>
+              <div
+                class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 hidden group-hover:block z-50 py-1"
+              >
+                <a
+                  href="#"
+                  onclick="app.openChangePasswordModal()"
+                  class="block px-4 py-2 hover:bg-slate-50 text-sm text-slate-700"
+                  ><i class="fa-solid fa-key mr-2"></i> Đổi mật khẩu</a
+                >
+                <a
+                  href="#"
+                  onclick="app.resetData()"
+                  class="block px-4 py-2 hover:bg-red-50 text-sm text-red-600"
+                  ><i class="fa-solid fa-trash-can mr-2"></i> Reset Data</a
+                >
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- DYNAMIC VIEW CONTAINER -->
+        <div id="viewContainer" class="flex-1 overflow-auto p-6 relative">
+          <!-- Content will be injected here -->
+        </div>
+      </main>
+    </div>
+
+    <!-- MODALS -->
+    <div
+      id="modalOverlay"
+      class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[80] backdrop-blur-sm transition-opacity opacity-0"
+    >
+      <div
+        id="modalContent"
+        class="bg-white rounded-xl shadow-2xl w-full max-w-2xl transform scale-95 transition-all duration-200 opacity-0 max-h-[90vh] overflow-hidden flex flex-col"
+      >
+        <!-- Modal injected content -->
+      </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div
+      id="toastContainer"
+      class="fixed top-6 right-6 z-[90] flex flex-col gap-3"
+    ></div>
+
     <!-- JAVASCRIPT LOGIC -->
     <script>
-      /**
-       * ====================================================================================
-       * MODULE 1: CONSTANTS & UTILS (Tiện ích & Hằng số)
-       * ====================================================================================
+      /** * =================================================================
+       * CORE UTILITIES & CONSTANTS
+       * =================================================================
        */
-
-      const ROLES = {
-        OWNER: "OWNER", // Full quyền, xem báo cáo tài chính
-        MANAGER: "MANAGER", // Sửa sản phẩm, xem báo cáo kho
-        SALES: "SALES", // Xuất kho, Trả hàng
-        WAREHOUSE: "WAREHOUSE", // Nhập kho, Kiểm kê
-      };
-
-      const TX_TYPES = {
-        IMPORT: "IMPORT", // Nhập hàng (US05)
-        EXPORT: "EXPORT", // Xuất bán (US06)
-        RETURN: "RETURN", // Khách trả hàng (US15)
-        STOCKTAKE: "STOCKTAKE", // Kiểm kê (US10)
-        DAMAGE: "DAMAGE", // Hủy/Thanh lý (US17)
-        TRANSFER: "TRANSFER", // Chuyển kho (US08)
-      };
-
-      const FORMATTER = {
-        currency: (amount) =>
+      const UTILS = {
+        formatCurrency: (amount) =>
           new Intl.NumberFormat("vi-VN", {
             style: "currency",
             currency: "VND",
           }).format(amount),
-        date: (dateStr) => new Date(dateStr).toLocaleString("vi-VN"),
-        number: (num) => new Intl.NumberFormat("vi-VN").format(num),
-      };
+        formatDate: (dateStr) =>
+          new Date(dateStr).toLocaleString("vi-VN", { hour12: false }),
+        generateId: (prefix = "ID") =>
+          `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random()
+            .toString(36)
+            .substr(2, 5)
+            .toUpperCase()}`,
 
-      const Utils = {
-        generateId: () => Math.random().toString(36).substr(2, 9).toUpperCase(),
-
-        // Hàm hiển thị thông báo (Toast)
         showToast: (message, type = "success") => {
           const container = document.getElementById("toastContainer");
-          const toast = document.createElement("div");
-
+          const el = document.createElement("div");
+          const icons = {
+            success: "fa-circle-check",
+            error: "fa-circle-xmark",
+            warning: "fa-circle-exclamation",
+            info: "fa-circle-info",
+          };
           const colors = {
-            success: "bg-green-500",
-            error: "bg-red-500",
-            warning: "bg-yellow-500",
+            success: "bg-emerald-500",
+            error: "bg-rose-500",
+            warning: "bg-amber-500",
             info: "bg-blue-500",
           };
 
-          toast.className = `${colors[type]} text-white px-4 py-3 rounded shadow-lg flex items-center gap-3 min-w-[300px] toast-enter`;
-          toast.innerHTML = `
-                    <i class="fa-solid ${
-                      type === "success"
-                        ? "fa-check-circle"
-                        : "fa-exclamation-circle"
-                    }"></i>
-                    <span class="font-medium text-sm">${message}</span>
-                `;
+          el.className = `${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[320px] slide-in-right transform transition-all duration-500`;
+          el.innerHTML = `<i class="fa-solid ${icons[type]} text-lg"></i><div class="font-medium text-sm">${message}</div>`;
 
-          container.appendChild(toast);
+          container.appendChild(el);
           setTimeout(() => {
-            toast.style.opacity = "0";
-            toast.style.transform = "translateX(100%)";
-            setTimeout(() => toast.remove(), 300);
-          }, 3000);
+            el.style.opacity = "0";
+            el.style.transform = "translateX(100%)";
+          }, 4000);
+          setTimeout(() => el.remove(), 4500);
+        },
+
+        exportToCSV: (filename, rows) => {
+          const processRow = (row) =>
+            row
+              .map((val) => `"${val.toString().replace(/"/g, '""')}"`)
+              .join(",");
+          const csvContent = "\uFEFF" + rows.map(processRow).join("\n");
+          const blob = new Blob([csvContent], {
+            type: "text/csv;charset=utf-8;",
+          });
+          const link = document.createElement("a");
+          if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
         },
       };
 
-      /**
-       * ====================================================================================
-       * MODULE 2: STORAGE SERVICE (Quản lý dữ liệu LocalStorage)
-       * ====================================================================================
+      const ROLES = {
+        ADMIN: {
+          label: "Administrator",
+          color: "bg-purple-100 text-purple-700",
+        },
+        MANAGER: { label: "Quản Lý", color: "bg-blue-100 text-blue-700" },
+        STAFF: { label: "Nhân Viên", color: "bg-slate-100 text-slate-700" },
+      };
+
+      const TX_TYPES = {
+        IMPORT: {
+          label: "Nhập Kho",
+          color: "text-emerald-600",
+          bg: "bg-emerald-100",
+          sign: 1,
+        },
+        EXPORT: {
+          label: "Xuất Bán",
+          color: "text-blue-600",
+          bg: "bg-blue-100",
+          sign: -1,
+        },
+        RETURN: {
+          label: "Trả Hàng",
+          color: "text-purple-600",
+          bg: "bg-purple-100",
+          sign: 1,
+        },
+        DAMAGE: {
+          label: "Hủy Hàng",
+          color: "text-rose-600",
+          bg: "bg-rose-100",
+          sign: -1,
+        },
+        STOCKTAKE: {
+          label: "Kiểm Kê",
+          color: "text-amber-600",
+          bg: "bg-amber-100",
+          sign: 0,
+        },
+      };
+
+      /** * =================================================================
+       * DATA LAYER
+       * =================================================================
        */
-      class StorageService {
+      class Database {
         constructor() {
-          this.KEYS = {
-            PRODUCTS: "ims_products",
-            TRANSACTIONS: "ims_transactions",
-            SUPPLIERS: "ims_suppliers", // US12
-            SETTINGS: "ims_settings",
+          this.loadData();
+        }
+
+        loadData() {
+          this.products =
+            JSON.parse(localStorage.getItem("ims_products")) || [];
+          this.transactions =
+            JSON.parse(localStorage.getItem("ims_transactions")) || [];
+          this.users = JSON.parse(localStorage.getItem("ims_users")) || [
+            {
+              id: "USR-ADMIN",
+              username: "admin",
+              password: "123456",
+              role: "ADMIN",
+              fullname: "Administrator",
+              active: true,
+            },
+          ];
+          this.settings = JSON.parse(localStorage.getItem("ims_settings")) || {
+            categories: [
+              "Điện Tử",
+              "Gia Dụng",
+              "Thực Phẩm",
+              "Thời Trang",
+              "Khác",
+            ],
+            units: ["Cái", "Hộp", "Thùng", "Kg", "Bộ"],
           };
         }
 
-        get(key) {
-          const data = localStorage.getItem(key);
-          return data ? JSON.parse(data) : [];
+        save(key) {
+          if (key === "users")
+            localStorage.setItem("ims_users", JSON.stringify(this.users));
+          else if (key === "settings")
+            localStorage.setItem("ims_settings", JSON.stringify(this.settings));
+          else {
+            localStorage.setItem("ims_products", JSON.stringify(this.products));
+            localStorage.setItem(
+              "ims_transactions",
+              JSON.stringify(this.transactions)
+            );
+          }
         }
 
-        set(key, data) {
-          localStorage.setItem(key, JSON.stringify(data));
-        }
-
-        // Xóa sạch dữ liệu để reset
-        clearAll() {
+        reset() {
           localStorage.clear();
-        }
-      }
-
-      /**
-       * ====================================================================================
-       * MODULE 3: DATA MANAGERS (Logic nghiệp vụ)
-       * ====================================================================================
-       */
-
-      // Quản lý sản phẩm (Product Logic)
-      class ProductManager {
-        constructor(storage) {
-          this.storage = storage;
-          this.products = this.storage.get(this.storage.KEYS.PRODUCTS);
+          location.reload();
         }
 
-        getAll() {
-          // Lọc sản phẩm chưa bị xóa (Soft delete US04)
-          return this.products.filter((p) => !p.isDeleted);
+        // --- PRODUCT METHODS ---
+        getProducts(filterDeleted = true) {
+          return filterDeleted
+            ? this.products.filter((p) => !p.isDeleted)
+            : this.products;
         }
 
-        getById(id) {
+        getProduct(id) {
           return this.products.find((p) => p.id === id);
         }
 
-        // US01: Thêm sản phẩm
-        add(productData) {
-          if (this.products.some((p) => p.sku === productData.sku)) {
+        addProduct(data) {
+          if (this.products.some((p) => p.sku === data.sku && !p.isDeleted))
             throw new Error("Mã SKU đã tồn tại!");
-          }
           const newProduct = {
-            id: Utils.generateId(),
-            ...productData,
-            currentStock: 0, // Mặc định tồn kho bằng 0 khi mới tạo
-            createdAt: new Date().toISOString(),
+            id: UTILS.generateId("PRD"),
+            ...data,
+            currentStock: 0,
             isDeleted: false,
+            createdAt: new Date().toISOString(),
           };
           this.products.push(newProduct);
           this.save();
           return newProduct;
         }
 
-        // US02: Sửa sản phẩm
-        update(id, data) {
-          const index = this.products.findIndex((p) => p.id === id);
-          if (index === -1) throw new Error("Không tìm thấy sản phẩm");
-
-          this.products[index] = { ...this.products[index], ...data };
+        updateProduct(id, data) {
+          const idx = this.products.findIndex((p) => p.id === id);
+          if (idx === -1) throw new Error("Không tìm thấy sản phẩm");
+          delete data.currentStock; // Safety
+          delete data.sku;
+          this.products[idx] = { ...this.products[idx], ...data };
           this.save();
         }
 
-        // US04: Xóa mềm (Soft Delete)
-        remove(id) {
-          const product = this.getById(id);
-          if (product) {
-            product.isDeleted = true;
+        deleteProduct(id) {
+          const p = this.getProduct(id);
+          if (p) {
+            p.isDeleted = true;
             this.save();
           }
         }
 
-        // Cập nhật tồn kho (Được gọi từ TransactionManager)
-        updateStock(id, quantityChange) {
-          const product = this.getById(id);
-          if (!product) return;
-
-          product.currentStock += quantityChange;
-          this.save();
-        }
-
-        save() {
-          this.storage.set(this.storage.KEYS.PRODUCTS, this.products);
-        }
-      }
-
-      // Quản lý giao dịch (Nhập/Xuất/Kiểm kê)
-      class TransactionManager {
-        constructor(storage, productManager) {
-          this.storage = storage;
-          this.productManager = productManager;
-          this.transactions = this.storage.get(this.storage.KEYS.TRANSACTIONS);
-        }
-
-        getAll() {
-          return this.transactions.sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
-          );
-        }
-
-        // Tạo giao dịch mới (Core Logic cho US05, US06, US10, US15, US17)
-        createTransaction(type, items, metaData = {}) {
-          // Validate trước khi thực hiện
-          if (type === TX_TYPES.EXPORT || type === TX_TYPES.DAMAGE) {
+        // --- TRANSACTION METHODS ---
+        addTransaction(type, items, meta = {}) {
+          if (["EXPORT", "DAMAGE"].includes(type)) {
             items.forEach((item) => {
-              const product = this.productManager.getById(item.productId);
-              if (product.currentStock < item.quantity) {
+              const p = this.getProduct(item.productId);
+              if (p.currentStock < item.quantity)
                 throw new Error(
-                  `Sản phẩm ${product.name} không đủ tồn kho! (Còn: ${product.currentStock})`
+                  `SP ${p.name} không đủ tồn kho (Còn: ${p.currentStock})`
                 );
-              }
             });
           }
 
+          const txId = UTILS.generateId("TX");
           const transaction = {
-            id: Utils.generateId(),
+            id: txId,
             type,
             date: new Date().toISOString(),
-            items, // [{ productId, quantity, price }]
-            totalValue: items.reduce(
-              (sum, item) => sum + item.quantity * item.price,
-              0
-            ),
-            ...metaData, // supplierId, customerInfo, reason, etc.
+            items: items.map((i) => ({ ...i })), // Deep copy items
+            totalValue: items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+            reason: meta.reason || "",
+            createdBy: meta.user || "System",
           };
 
-          // Cập nhật tồn kho dựa trên loại giao dịch
           items.forEach((item) => {
+            const p = this.getProduct(item.productId);
             let change = 0;
-            switch (type) {
-              case TX_TYPES.IMPORT:
-              case TX_TYPES.RETURN: // Khách trả lại -> Tăng kho
-                change = item.quantity;
-                break;
-              case TX_TYPES.EXPORT:
-              case TX_TYPES.DAMAGE: // Hư hỏng/Thanh lý -> Giảm kho
-                change = -item.quantity;
-                break;
-              case TX_TYPES.STOCKTAKE:
-                // US11: Tự động điều chỉnh kho
-                // Với Stocktake, item.quantity là số thực tế. Ta cần tính chênh lệch.
-                const current = this.productManager.getById(
-                  item.productId
-                ).currentStock;
-                change = item.quantity - current;
-                break;
-            }
-            this.productManager.updateStock(item.productId, change);
+            if (type === "STOCKTAKE") change = item.quantity - p.currentStock;
+            else change = item.quantity * TX_TYPES[type].sign;
+
+            p.currentStock += change;
+            item.snapshotStock = p.currentStock;
+            item.change = change;
           });
 
-          this.transactions.push(transaction);
+          this.transactions.unshift(transaction);
           this.save();
           return transaction;
         }
 
-        // US19: Lấy lịch sử giao dịch của 1 sản phẩm (Thẻ kho)
-        getProductHistory(productId) {
-          return this.transactions
-            .filter((tx) =>
-              tx.items.some((item) => item.productId === productId)
-            )
-            .map((tx) => {
-              const item = tx.items.find((i) => i.productId === productId);
-              return {
-                ...tx,
-                itemQuantity: item.quantity,
-                itemPrice: item.price,
-              };
-            });
+        // --- USER & SETTINGS METHODS ---
+        getUser(username) {
+          return this.users.find((u) => u.username === username);
         }
 
-        save() {
-          this.storage.set(this.storage.KEYS.TRANSACTIONS, this.transactions);
-        }
-      }
-
-      /**
-       * ====================================================================================
-       * MODULE 4: MOCK DATA GENERATOR (Tạo dữ liệu mẫu)
-       * ====================================================================================
-       */
-      class MockDataGenerator {
-        constructor(storageService) {
-          this.storage = storageService;
+        addUser(data) {
+          if (this.getUser(data.username))
+            throw new Error("Tên đăng nhập đã tồn tại!");
+          this.users.push({
+            id: UTILS.generateId("USR"),
+            ...data,
+            active: true,
+          });
+          this.save("users");
         }
 
-        generate() {
-          this.storage.clearAll();
-
-          // 1. Tạo Danh mục & Sản phẩm mẫu
-          const categories = ["Thực phẩm", "Đồ uống", "Gia dụng", "Điện tử"];
-          const products = [];
-          for (let i = 1; i <= 30; i++) {
-            const cat =
-              categories[Math.floor(Math.random() * categories.length)];
-            const cost = Math.floor(Math.random() * 50) * 1000 + 10000;
-            products.push({
-              id: `PROD-${i}`,
-              sku: `SKU-${1000 + i}`,
-              name: `Sản phẩm Demo ${i} (${cat})`,
-              category: cat,
-              unit: "Cái",
-              costPrice: cost,
-              sellingPrice: cost * 1.3,
-              minStock: 10,
-              currentStock: Math.floor(Math.random() * 100), // Stock ban đầu
-              isDeleted: false,
-            });
-          }
-          this.storage.set(this.storage.KEYS.PRODUCTS, products);
-
-          // 2. Tạo Nhà cung cấp mẫu (US12)
-          const suppliers = [
-            {
-              id: "SUP1",
-              name: "Công ty ABC",
-              phone: "0909123456",
-              address: "Hà Nội",
-              debt: 0,
-            },
-            {
-              id: "SUP2",
-              name: "NPP XYZ",
-              phone: "0912345678",
-              address: "HCM",
-              debt: 5000000,
-            },
-          ];
-          this.storage.set(this.storage.KEYS.SUPPLIERS, suppliers);
-
-          // 3. Tạo lịch sử giao dịch mẫu (Để biểu đồ đẹp)
-          const transactions = [];
-          const types = [TX_TYPES.IMPORT, TX_TYPES.EXPORT];
-
-          // Giả lập 20 giao dịch gần nhất
-          for (let k = 0; k < 20; k++) {
-            const type = types[Math.floor(Math.random() * types.length)];
-            const items = [
-              {
-                productId: `PROD-${Math.floor(Math.random() * 20) + 1}`,
-                quantity: Math.floor(Math.random() * 10) + 1,
-                price: 50000,
-              },
-            ];
-            transactions.push({
-              id: `TX-${k}`,
-              type: type,
-              date: new Date(Date.now() - k * 86400000).toISOString(), // Mỗi ngày 1 cái
-              items: items,
-              totalValue: items[0].quantity * items[0].price,
-              createdBy: "Admin",
-            });
-          }
-          this.storage.set(this.storage.KEYS.TRANSACTIONS, transactions);
-
-          Utils.showToast("Đã tạo dữ liệu mẫu thành công!", "success");
-          setTimeout(() => location.reload(), 1000);
-        }
-      }
-
-      /**
-       * ====================================================================================
-       * MODULE 5: UI MANAGER (Quản lý giao diện chính)
-       * ====================================================================================
-       */
-      class UIManager {
-        constructor() {
-          this.storage = new StorageService();
-          this.productManager = new ProductManager(this.storage);
-          this.transactionManager = new TransactionManager(
-            this.storage,
-            this.productManager
-          );
-          this.currentRole = ROLES.OWNER; // Mặc định
-          this.currentView = "DASHBOARD";
-
-          this.initEventListeners();
-          this.renderSidebar();
-          this.renderView();
+        updateUser(id, data) {
+          const idx = this.users.findIndex((u) => u.id === id);
+          if (idx === -1) throw new Error("User not found");
+          this.users[idx] = { ...this.users[idx], ...data };
+          this.save("users");
         }
 
-        initEventListeners() {
-          // Role Switcher
-          document
-            .getElementById("roleSwitcher")
-            .addEventListener("change", (e) => {
-              this.currentRole = e.target.value;
-              this.renderSidebar();
-              this.renderView("DASHBOARD"); // Về dashboard khi đổi quyền
-              Utils.showToast(
-                `Đã chuyển sang vai trò: ${this.currentRole}`,
-                "info"
+        updateSettings(type, action, value) {
+          if (type === "categories") {
+            if (action === "add") this.settings.categories.push(value);
+            if (action === "remove")
+              this.settings.categories = this.settings.categories.filter(
+                (c) => c !== value
               );
-            });
+          } else if (type === "units") {
+            if (action === "add") this.settings.units.push(value);
+            if (action === "remove")
+              this.settings.units = this.settings.units.filter(
+                (u) => u !== value
+              );
+          }
+          this.save("settings");
+        }
+      }
 
-          // Global Search
+      /** * =================================================================
+       * UI MANAGER (Controller)
+       * =================================================================
+       */
+      class App {
+        constructor() {
+          this.db = new Database();
+          this.currentUser =
+            JSON.parse(sessionStorage.getItem("ims_current_user")) || null;
+          this.currentView = "DASHBOARD";
+          this.cart = [];
+
+          this.init();
+        }
+
+        init() {
+          if (!this.currentUser) {
+            this.showLogin();
+          } else {
+            this.showMainApp();
+          }
+
           document
             .getElementById("globalSearch")
             .addEventListener("input", (e) => {
-              // Logic search đơn giản: nếu đang ở trang sản phẩm thì lọc sản phẩm
-              if (this.currentView === "PRODUCTS") {
+              if (this.currentView === "PRODUCTS")
                 this.renderProductList(e.target.value);
-              }
             });
         }
 
-        // Render Sidebar dựa trên Role (US00 - Implicit)
-        renderSidebar() {
-          const menu = document.getElementById("navMenu");
-          menu.innerHTML = "";
-
-          const menuItems = [
-            {
-              id: "DASHBOARD",
-              icon: "fa-chart-pie",
-              label: "Tổng quan",
-              roles: [ROLES.OWNER, ROLES.MANAGER],
-            },
-            {
-              id: "PRODUCTS",
-              icon: "fa-box",
-              label: "Sản phẩm",
-              roles: [ROLES.OWNER, ROLES.MANAGER, ROLES.WAREHOUSE, ROLES.SALES],
-            },
-            {
-              id: "IMPORT",
-              icon: "fa-dolly",
-              label: "Nhập kho",
-              roles: [ROLES.OWNER, ROLES.WAREHOUSE, ROLES.MANAGER],
-            },
-            {
-              id: "EXPORT",
-              icon: "fa-cart-shopping",
-              label: "Bán hàng",
-              roles: [ROLES.OWNER, ROLES.SALES, ROLES.MANAGER],
-            },
-            {
-              id: "STOCKTAKE",
-              icon: "fa-clipboard-check",
-              label: "Kiểm kê",
-              roles: [ROLES.OWNER, ROLES.WAREHOUSE, ROLES.MANAGER],
-            },
-            {
-              id: "TRANSACTIONS",
-              icon: "fa-history",
-              label: "Lịch sử GD",
-              roles: [ROLES.OWNER, ROLES.MANAGER],
-            },
-          ];
-
-          menuItems.forEach((item) => {
-            if (item.roles.includes(this.currentRole)) {
-              const li = document.createElement("li");
-              li.className = `p-3 rounded-lg cursor-pointer flex items-center gap-3 hover:bg-slate-800 transition ${
-                this.currentView === item.id ? "bg-blue-600" : ""
-              }`;
-              li.innerHTML = `<i class="fa-solid ${item.icon} w-5"></i> <span>${item.label}</span>`;
-              li.onclick = () => this.renderView(item.id);
-              menu.appendChild(li);
-            }
-          });
+        // --- AUTH SYSTEM ---
+        showLogin() {
+          document.getElementById("loginScreen").classList.remove("hidden");
+          document.getElementById("appLayout").classList.add("hidden");
         }
 
-        // Router đơn giản để chuyển View
-        renderView(viewName = this.currentView) {
-          this.currentView = viewName;
-          this.renderSidebar(); // Update active state
+        showMainApp() {
+          document.getElementById("loginScreen").classList.add("hidden");
+          document.getElementById("appLayout").classList.remove("hidden");
 
-          const content = document.getElementById("contentArea");
-          content.innerHTML = ""; // Clear content
+          // Render User Info
+          document.getElementById("userNameDisplay").textContent =
+            this.currentUser.fullname;
+          document.getElementById("userRoleDisplay").textContent =
+            ROLES[this.currentUser.role]?.label || this.currentUser.role;
+          document.getElementById("userAvatar").textContent =
+            this.currentUser.fullname.substring(0, 2).toUpperCase();
 
-          switch (viewName) {
-            case "DASHBOARD":
-              this.renderDashboard(content);
-              break;
-            case "PRODUCTS":
-              this.renderProductList(content);
-              break;
-            case "IMPORT":
-              this.renderTransactionForm(content, TX_TYPES.IMPORT);
-              break;
-            case "EXPORT":
-              this.renderTransactionForm(content, TX_TYPES.EXPORT);
-              break;
-            case "STOCKTAKE":
-              this.renderStocktake(content);
-              break;
-            case "TRANSACTIONS":
-              this.renderHistory(content);
-              break;
-            default:
-              content.innerHTML = "<p>Đang phát triển...</p>";
+          this.renderSidebar();
+          this.navigate("DASHBOARD");
+        }
+
+        login(e) {
+          e.preventDefault();
+          const form = new FormData(e.target);
+          const user = this.db.getUser(form.get("username"));
+
+          if (user && user.password === form.get("password") && user.active) {
+            this.currentUser = user;
+            sessionStorage.setItem("ims_current_user", JSON.stringify(user));
+            UTILS.showToast(`Chào mừng, ${user.fullname}!`);
+            this.showMainApp();
+          } else {
+            UTILS.showToast(
+              "Sai tên đăng nhập, mật khẩu hoặc tài khoản bị khóa!",
+              "error"
+            );
           }
         }
 
-        /**
-         * VIEW: DASHBOARD (US18)
-         */
+        logout() {
+          this.currentUser = null;
+          sessionStorage.removeItem("ims_current_user");
+          this.showLogin();
+        }
+
+        openChangePasswordModal() {
+          const overlay = document.getElementById("modalOverlay");
+          const content = document.getElementById("modalContent");
+          content.innerHTML = `
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                   <h3 class="font-bold text-lg text-slate-800">Đổi Mật Khẩu</h3>
+                   <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+                <form id="changePassForm" class="p-6 space-y-4">
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mật khẩu cũ</label>
+                       <input type="password" name="oldPass" class="w-full border rounded p-2" required>
+                   </div>
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mật khẩu mới</label>
+                       <input type="password" name="newPass" class="w-full border rounded p-2" required>
+                   </div>
+                   <button type="submit" class="w-full bg-brand-600 text-white font-bold py-2 rounded">Cập nhật</button>
+                </form>
+            `;
+          this._showModal(overlay, content);
+          document.getElementById("changePassForm").onsubmit = (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            if (this.currentUser.password !== formData.get("oldPass"))
+              return UTILS.showToast("Mật khẩu cũ không đúng", "error");
+
+            this.db.updateUser(this.currentUser.id, {
+              password: formData.get("newPass"),
+            });
+            this.currentUser.password = formData.get("newPass"); // Update session
+            sessionStorage.setItem(
+              "ims_current_user",
+              JSON.stringify(this.currentUser)
+            );
+            UTILS.showToast("Đổi mật khẩu thành công!");
+            this.closeModal();
+          };
+        }
+
+        // --- NAVIGATION ---
+        renderSidebar() {
+          const menu = document.getElementById("sidebarMenu");
+          menu.innerHTML = "";
+
+          const isAdmin = this.currentUser.role === "ADMIN";
+
+          // 1. Tổng quan
+          this._addSidebarHeader(menu, "Tổng quan");
+          this._addSidebarItem(menu, "DASHBOARD", "fa-chart-pie", "Dashboard");
+
+          // 2. Quản lý kho
+          this._addSidebarHeader(menu, "Quản lý kho", "mt-6");
+          this._addSidebarItem(
+            menu,
+            "PRODUCTS",
+            "fa-boxes-stacked",
+            "Sản phẩm"
+          );
+          this._addSidebarItem(menu, "IMPORT", "fa-dolly", "Nhập kho");
+          this._addSidebarItem(menu, "EXPORT", "fa-cart-shopping", "Xuất bán");
+
+          // 3. Vận hành
+          this._addSidebarHeader(menu, "Vận hành", "mt-6");
+          this._addSidebarItem(
+            menu,
+            "STOCKTAKE",
+            "fa-clipboard-check",
+            "Kiểm kê"
+          );
+          this._addSidebarItem(menu, "RETURN", "fa-rotate-left", "Trả hàng");
+          this._addSidebarItem(
+            menu,
+            "DAMAGE",
+            "fa-triangle-exclamation",
+            "Hủy hàng"
+          );
+
+          // 4. Báo cáo
+          this._addSidebarHeader(menu, "Báo cáo", "mt-6");
+          this._addSidebarItem(menu, "REPORT", "fa-file-invoice", "Lịch sử GD");
+
+          // 5. Hệ thống (Admin Only)
+          if (isAdmin) {
+            this._addSidebarHeader(menu, "Hệ thống", "mt-6");
+            this._addSidebarItem(menu, "USERS", "fa-users-gear", "Nhân viên");
+            this._addSidebarItem(menu, "SETTINGS", "fa-sliders", "Cấu hình");
+          }
+        }
+
+        _addSidebarHeader(parent, text, margin = "mb-2") {
+          const div = document.createElement("div");
+          div.className = `px-3 ${margin} mb-2 text-xs font-bold text-brand-400 uppercase tracking-wider`;
+          div.innerText = text;
+          parent.appendChild(div);
+        }
+
+        _addSidebarItem(parent, id, icon, label) {
+          const btn = document.createElement("button");
+          btn.onclick = () => this.navigate(id);
+          btn.className = `nav-item w-full text-left px-3 py-2.5 rounded-lg hover:bg-brand-800 transition flex items-center gap-3 text-brand-100`;
+          btn.setAttribute("data-id", id);
+          btn.innerHTML = `<i class="fa-solid ${icon} w-5 text-center"></i> ${label}`;
+          parent.appendChild(btn);
+        }
+
+        navigate(view) {
+          this.currentView = view;
+          this.cart = []; // Reset cart
+
+          // Update Sidebar Active State
+          document.querySelectorAll(".nav-item").forEach((el) => {
+            if (el.getAttribute("data-id") === view) {
+              el.classList.add("bg-brand-700", "text-white", "shadow-inner");
+              el.classList.remove("text-brand-100");
+            } else {
+              el.classList.remove("bg-brand-700", "text-white", "shadow-inner");
+              el.classList.add("text-brand-100");
+            }
+          });
+
+          const container = document.getElementById("viewContainer");
+          const title = document.getElementById("pageTitle");
+
+          // Router
+          switch (view) {
+            case "DASHBOARD":
+              title.innerText = "Tổng quan hệ thống";
+              this.renderDashboard(container);
+              break;
+            case "PRODUCTS":
+              title.innerText = "Quản lý sản phẩm";
+              this.renderProductList(container);
+              break;
+            case "IMPORT":
+            case "EXPORT":
+            case "RETURN":
+            case "DAMAGE":
+              title.innerText = TX_TYPES[view].label;
+              this.renderTransactionForm(container, view);
+              break;
+            case "STOCKTAKE":
+              title.innerText = "Kiểm kê kho";
+              this.renderStocktake(container);
+              break;
+            case "REPORT":
+              title.innerText = "Báo cáo & Lịch sử";
+              this.renderReport(container);
+              break;
+            // Admin Routes
+            case "USERS":
+              title.innerText = "Quản lý nhân viên";
+              this.renderUsers(container);
+              break;
+            case "SETTINGS":
+              title.innerText = "Cấu hình hệ thống";
+              this.renderSettings(container);
+              break;
+          }
+        }
+
+        // --- ADMIN VIEWS: USERS & SETTINGS ---
+        renderUsers(container) {
+          if (this.currentUser.role !== "ADMIN")
+            return (container.innerHTML =
+              '<p class="text-red-500">Truy cập bị từ chối</p>');
+
+          const users = this.db.users;
+          container.innerHTML = `
+                <div class="flex justify-between items-center mb-6 fade-in">
+                    <h3 class="font-bold text-slate-700">Danh sách nhân viên</h3>
+                    <button onclick="app.openUserModal()" class="bg-brand-600 text-white px-4 py-2 rounded-lg shadow hover:bg-brand-700"><i class="fa-solid fa-plus mr-2"></i> Thêm nhân viên</button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 font-bold text-slate-500 border-b border-slate-100">
+                            <tr><th class="p-4">Họ tên</th><th class="p-4">Username</th><th class="p-4">Vai trò</th><th class="p-4">Trạng thái</th><th class="p-4 text-center">Thao tác</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${users
+                              .map(
+                                (u) => `
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-4 font-bold text-slate-700">${
+                                      u.fullname
+                                    }</td>
+                                    <td class="p-4 font-mono text-slate-500">${
+                                      u.username
+                                    }</td>
+                                    <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
+                                      ROLES[u.role].color
+                                    }">${ROLES[u.role].label}</span></td>
+                                    <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
+                                      u.active
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-red-100 text-red-700"
+                                    }">${
+                                  u.active ? "Hoạt động" : "Đã khóa"
+                                }</span></td>
+                                    <td class="p-4 text-center">
+                                        <button onclick="app.openUserModal('${
+                                          u.id
+                                        }')" class="text-blue-600 hover:text-blue-800 mr-2" title="Sửa"><i class="fa-solid fa-pen"></i></button>
+                                        ${
+                                          u.username !== "admin"
+                                            ? `<button onclick="app.toggleUserStatus('${
+                                                u.id
+                                              }')" class="${
+                                                u.active
+                                                  ? "text-orange-500"
+                                                  : "text-green-500"
+                                              }" title="${
+                                                u.active ? "Khóa" : "Mở khóa"
+                                              }"><i class="fa-solid ${
+                                                u.active
+                                                  ? "fa-lock"
+                                                  : "fa-lock-open"
+                                              }"></i></button>`
+                                            : ""
+                                        }
+                                    </td>
+                                </tr>
+                            `
+                              )
+                              .join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        openUserModal(id = null) {
+          const isEdit = !!id;
+          const u = isEdit ? this.db.users.find((x) => x.id === id) : {};
+          const overlay = document.getElementById("modalOverlay");
+          const content = document.getElementById("modalContent");
+
+          content.innerHTML = `
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                   <h3 class="font-bold text-lg text-slate-800">${
+                     isEdit ? "Sửa thông tin" : "Tạo tài khoản mới"
+                   }</h3>
+                   <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+                <form id="userForm" class="p-6 space-y-4">
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Họ và tên</label>
+                       <input type="text" name="fullname" value="${
+                         u.fullname || ""
+                       }" class="w-full border rounded p-2" required>
+                   </div>
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tên đăng nhập</label>
+                       <input type="text" name="username" value="${
+                         u.username || ""
+                       }" ${
+            isEdit
+              ? 'disabled class="w-full border rounded p-2 bg-slate-100"'
+              : 'class="w-full border rounded p-2"'
+          } required>
+                   </div>
+                   ${
+                     !isEdit
+                       ? `
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mật khẩu</label>
+                       <input type="password" name="password" class="w-full border rounded p-2" required>
+                   </div>`
+                       : `
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mật khẩu mới (Để trống nếu không đổi)</label>
+                       <input type="password" name="password" class="w-full border rounded p-2" placeholder="********">
+                   </div>`
+                   }
+                   <div>
+                       <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Vai trò</label>
+                       <select name="role" class="w-full border rounded p-2">
+                           ${Object.keys(ROLES)
+                             .map(
+                               (k) =>
+                                 `<option value="${k}" ${
+                                   u.role === k ? "selected" : ""
+                                 }>${ROLES[k].label}</option>`
+                             )
+                             .join("")}
+                       </select>
+                   </div>
+                   <button type="submit" class="w-full bg-brand-600 text-white font-bold py-2 rounded mt-4">Lưu</button>
+                </form>
+            `;
+          this._showModal(overlay, content);
+
+          document.getElementById("userForm").onsubmit = (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+            if (isEdit && !data.password) delete data.password; // Don't update pass if empty in edit mode
+
+            try {
+              if (isEdit) this.db.updateUser(id, data);
+              else this.db.addUser(data);
+              UTILS.showToast("Thành công");
+              this.closeModal();
+              this.renderUsers(document.getElementById("viewContainer"));
+            } catch (err) {
+              UTILS.showToast(err.message, "error");
+            }
+          };
+        }
+
+        toggleUserStatus(id) {
+          const u = this.db.users.find((x) => x.id === id);
+          if (
+            confirm(
+              `Bạn có chắc muốn ${u.active ? "KHÓA" : "MỞ KHÓA"} tài khoản này?`
+            )
+          ) {
+            this.db.updateUser(id, { active: !u.active });
+            this.renderUsers(document.getElementById("viewContainer"));
+          }
+        }
+
+        renderSettings(container) {
+          if (this.currentUser.role !== "ADMIN") return;
+          const { categories, units } = this.db.settings;
+
+          const renderList = (title, items, type) => `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex-1">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold text-slate-700">${title}</h4>
+                        <form onsubmit="app.addSetting(event, '${type}')" class="flex gap-2">
+                            <input name="val" placeholder="Thêm mới..." class="border rounded px-2 py-1 text-sm outline-none focus:border-brand-500" required>
+                            <button class="bg-brand-100 text-brand-600 px-3 py-1 rounded text-sm hover:bg-brand-200"><i class="fa-solid fa-plus"></i></button>
+                        </form>
+                    </div>
+                    <ul class="space-y-2">
+                        ${items
+                          .map(
+                            (i) => `
+                            <li class="flex justify-between items-center p-2 bg-slate-50 rounded group">
+                                <span class="text-sm">${i}</span>
+                                <button onclick="app.removeSetting('${type}', '${i}')" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-times"></i></button>
+                            </li>
+                        `
+                          )
+                          .join("")}
+                    </ul>
+                </div>
+            `;
+
+          container.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-6 fade-in">
+                    ${renderList("Danh mục sản phẩm", categories, "categories")}
+                    ${renderList("Đơn vị tính", units, "units")}
+                </div>
+            `;
+        }
+
+        addSetting(e, type) {
+          e.preventDefault();
+          const val = e.target.val.value.trim();
+          if (val) {
+            this.db.updateSettings(type, "add", val);
+            this.renderSettings(document.getElementById("viewContainer"));
+          }
+        }
+
+        removeSetting(type, val) {
+          if (confirm(`Xóa "${val}" khỏi danh sách?`)) {
+            this.db.updateSettings(type, "remove", val);
+            this.renderSettings(document.getElementById("viewContainer"));
+          }
+        }
+
+        // --- DASHBOARD & PRODUCT VIEW (Updated) ---
         renderDashboard(container) {
-          const products = this.productManager.getAll();
+          const products = this.db.getProducts();
           const totalStock = products.reduce(
             (sum, p) => sum + p.currentStock,
             0
@@ -651,709 +1033,960 @@
             (sum, p) => sum + p.currentStock * p.costPrice,
             0
           );
-          const lowStockCount = products.filter(
-            (p) => p.currentStock <= p.minStock
-          ).length; // US09
+          const lowStock = products.filter((p) => p.currentStock <= p.minStock);
+          const recentTx = this.db.transactions.slice(0, 5);
 
           container.innerHTML = `
-                    <h2 class="text-2xl font-bold mb-6">Tổng quan kinh doanh</h2>
-                    
-                    <!-- KPI Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white p-5 rounded-lg shadow border-l-4 border-blue-500">
-                            <p class="text-gray-500 text-sm">Tổng tồn kho</p>
-                            <p class="text-2xl font-bold">${FORMATTER.number(
-                              totalStock
-                            )} <span class="text-sm font-normal">đv</span></p>
-                        </div>
-                        <div class="bg-white p-5 rounded-lg shadow border-l-4 border-green-500">
-                            <p class="text-gray-500 text-sm">Tổng giá trị kho</p>
-                            <p class="text-2xl font-bold text-green-600">${FORMATTER.currency(
-                              totalValue
-                            )}</p>
-                        </div>
-                        <div class="bg-white p-5 rounded-lg shadow border-l-4 border-red-500">
-                            <p class="text-gray-500 text-sm">Cảnh báo tồn thấp</p>
-                            <p class="text-2xl font-bold text-red-600">${lowStockCount} <span class="text-sm font-normal">sản phẩm</span></p>
-                            ${
-                              lowStockCount > 0
-                                ? '<p class="text-xs text-red-400 mt-1">Cần nhập hàng ngay!</p>'
-                                : ""
-                            }
-                        </div>
-                         <div class="bg-white p-5 rounded-lg shadow border-l-4 border-purple-500 cursor-pointer" onclick="app.exportExcel()">
-                            <p class="text-gray-500 text-sm">Báo cáo</p>
-                            <p class="text-lg font-bold text-purple-600"><i class="fa-solid fa-file-excel mr-2"></i>Xuất Excel</p>
-                            <p class="text-xs text-gray-400 mt-1">US20 Feature</p>
-                        </div>
-                    </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in">
+              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center">
+                <div class="p-4 rounded-full bg-blue-50 text-brand-600 mr-4"><i class="fa-solid fa-cubes text-2xl"></i></div>
+                <div>
+                  <div class="text-sm text-slate-500 font-medium">Tổng tồn kho</div>
+                  <div class="text-2xl font-bold text-slate-800">${UTILS.formatCurrency(
+                    totalStock
+                  ).replace(
+                    "₫",
+                    ""
+                  )} <span class="text-xs font-normal text-slate-400">đơn vị</span></div>
+                </div>
+              </div>
+              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center">
+                <div class="p-4 rounded-full bg-emerald-50 text-emerald-600 mr-4"><i class="fa-solid fa-sack-dollar text-2xl"></i></div>
+                <div>
+                  <div class="text-sm text-slate-500 font-medium">Giá trị kho</div>
+                  <div class="text-2xl font-bold text-slate-800">${UTILS.formatCurrency(
+                    totalValue
+                  )}</div>
+                </div>
+              </div>
+              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center cursor-pointer hover:bg-rose-50 transition" onclick="app.navigate('PRODUCTS')">
+                <div class="p-4 rounded-full bg-rose-50 text-rose-600 mr-4 relative">
+                  <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                  ${
+                    lowStock.length > 0
+                      ? '<span class="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-ping"></span>'
+                      : ""
+                  }
+                </div>
+                <div>
+                  <div class="text-sm text-slate-500 font-medium">Cảnh báo tồn thấp (US09)</div>
+                  <div class="text-2xl font-bold text-rose-600">${
+                    lowStock.length
+                  } <span class="text-xs font-normal text-slate-400">sản phẩm</span></div>
+                </div>
+              </div>
+            </div>
 
-                    <!-- Charts Area -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white p-5 rounded-lg shadow">
-                            <h3 class="font-bold mb-4">Phân bổ tồn kho theo danh mục</h3>
-                            <canvas id="categoryChart"></canvas>
-                        </div>
-                        <div class="bg-white p-5 rounded-lg shadow">
-                            <h3 class="font-bold mb-4">Sản phẩm sắp hết hàng (US09)</h3>
-                             <div class="overflow-auto max-h-60">
-                                <table class="w-full text-sm text-left">
-                                    <thead class="bg-gray-50 sticky top-0">
-                                        <tr><th>Sản phẩm</th><th>Tồn</th><th>Định mức</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        ${products
-                                          .filter(
-                                            (p) => p.currentStock <= p.minStock
-                                          )
-                                          .map(
-                                            (p) => `
-                                            <tr class="border-b hover:bg-red-50">
-                                                <td class="py-2">${p.name}</td>
-                                                <td class="py-2 font-bold text-red-600">${p.currentStock}</td>
-                                                <td class="py-2 text-gray-500">${p.minStock}</td>
-                                            </tr>
-                                        `
-                                          )
-                                          .join("")}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                `;
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+              <!-- Chart -->
+              <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <h3 class="font-bold text-slate-700 mb-4">Phân bổ tồn kho theo danh mục</h3>
+                <div class="h-64"><canvas id="dashboardChart"></canvas></div>
+              </div>
 
-          // Render Chart
+              <!-- Recent Activity -->
+              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <h3 class="font-bold text-slate-700 mb-4">Giao dịch gần đây</h3>
+                <div class="space-y-4">
+                  ${
+                    recentTx.length === 0
+                      ? '<div class="text-center text-slate-400 py-4">Chưa có giao dịch</div>'
+                      : recentTx
+                          .map(
+                            (tx) => `
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-50 last:border-0">
+                      <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full ${
+                          TX_TYPES[tx.type].bg
+                        } ${
+                              TX_TYPES[tx.type].color
+                            } flex items-center justify-center text-sm font-bold">
+                          ${tx.type.substr(0, 1)}
+                        </div>
+                        <div>
+                          <div class="text-sm font-bold text-slate-700">${
+                            TX_TYPES[tx.type].label
+                          }</div>
+                          <div class="text-xs text-slate-400">${UTILS.formatDate(
+                            tx.date
+                          )}</div>
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-sm font-medium">${UTILS.formatCurrency(
+                          tx.totalValue
+                        )}</div>
+                        <div class="text-xs text-slate-400">${
+                          tx.items.length
+                        } items</div>
+                      </div>
+                    </div>
+                  `
+                          )
+                          .join("")
+                  }
+                </div>
+                <button onclick="app.navigate('REPORT')" class="w-full mt-4 py-2 text-sm text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition">Xem tất cả</button>
+              </div>
+            </div>
+          `;
+
           setTimeout(() => {
             const ctx = document
-              .getElementById("categoryChart")
+              .getElementById("dashboardChart")
               .getContext("2d");
-            const categories = {};
-            products.forEach((p) => {
-              categories[p.category] =
-                (categories[p.category] || 0) + p.currentStock;
+            const catData = {};
+            this.db.getProducts().forEach((p) => {
+              catData[p.category] = (catData[p.category] || 0) + p.currentStock;
             });
-
             new Chart(ctx, {
-              type: "doughnut",
+              type: "bar",
               data: {
-                labels: Object.keys(categories),
+                labels: Object.keys(catData),
                 datasets: [
                   {
-                    data: Object.values(categories),
-                    backgroundColor: [
-                      "#3B82F6",
-                      "#10B981",
-                      "#F59E0B",
-                      "#EF4444",
-                      "#8B5CF6",
-                    ],
+                    label: "Tồn kho",
+                    data: Object.values(catData),
+                    backgroundColor: "#3b82f6",
+                    borderRadius: 4,
                   },
                 ],
               },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+              },
             });
-          }, 100);
+          }, 0);
         }
 
-        /**
-         * VIEW: PRODUCT LIST (US01, US02, US04)
-         */
         renderProductList(containerOrKeyword) {
           let container, products;
-
           if (typeof containerOrKeyword === "string") {
-            // Search mode logic
-            container = document.getElementById("productListBody");
-            const keyword = containerOrKeyword.toLowerCase();
-            products = this.productManager
-              .getAll()
+            container = document.querySelector("#productTableBody");
+            const kw = containerOrKeyword.toLowerCase();
+            products = this.db
+              .getProducts()
               .filter(
                 (p) =>
-                  p.name.toLowerCase().includes(keyword) ||
-                  p.sku.toLowerCase().includes(keyword)
+                  p.name.toLowerCase().includes(kw) ||
+                  p.sku.toLowerCase().includes(kw)
               );
-            // Chỉ render lại tbody
-            container.innerHTML = this._generateProductRows(products);
+            if (container)
+              container.innerHTML = this._generateProductRows(products);
             return;
-          } else {
-            container = containerOrKeyword;
-            products = this.productManager.getAll();
           }
 
-          container.innerHTML = `
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold">Danh sách sản phẩm</h2>
-                        ${
-                          [
-                            ROLES.OWNER,
-                            ROLES.MANAGER,
-                            ROLES.WAREHOUSE,
-                          ].includes(this.currentRole)
-                            ? `<button onclick="app.openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                             <i class="fa-solid fa-plus mr-2"></i>Thêm mới
-                           </button>`
-                            : ""
-                        }
-                    </div>
+          container = containerOrKeyword;
+          products = this.db.getProducts();
 
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="bg-gray-100 uppercase text-xs font-bold text-gray-600">
-                                    <tr>
-                                        <th class="px-6 py-3">SKU</th>
-                                        <th class="px-6 py-3">Tên sản phẩm</th>
-                                        <th class="px-6 py-3">Nhóm</th>
-                                        <th class="px-6 py-3 text-right">Giá vốn</th>
-                                        <th class="px-6 py-3 text-right">Giá bán</th>
-                                        <th class="px-6 py-3 text-center">Tồn kho</th>
-                                        <th class="px-6 py-3 text-center">Thao tác</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="productListBody" class="divide-y divide-gray-200">
-                                    ${this._generateProductRows(products)}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
+          container.innerHTML = `
+            <div class="flex justify-between items-center mb-6 fade-in">
+              <div class="flex gap-2">
+                <button onclick="app.openProductModal()" class="bg-brand-600 text-white px-5 py-2.5 rounded-lg shadow-lg hover:bg-brand-700 hover:shadow-xl transition flex items-center gap-2">
+                  <i class="fa-solid fa-plus"></i> Thêm Sản Phẩm (US01)
+                </button>
+                <div class="relative group">
+                  <button class="bg-white border border-slate-200 text-slate-600 px-5 py-2.5 rounded-lg shadow-sm hover:bg-slate-50 transition flex items-center gap-2">
+                    <i class="fa-solid fa-filter"></i> Lọc Danh Mục (US03)
+                  </button>
+                  <div class="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 hidden group-hover:block z-20 py-1">
+                    <a href="#" onclick="app.renderProductList(document.getElementById('viewContainer'))" class="block px-4 py-2 hover:bg-slate-50 text-sm">Tất cả</a>
+                    ${this.db.settings.categories
+                      .map(
+                        (c) =>
+                          `<a href="#" onclick="app.filterCategory('${c}')" class="block px-4 py-2 hover:bg-slate-50 text-sm">${c}</a>`
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              </div>
+              <button onclick="app.exportExcel()" class="text-emerald-600 bg-emerald-50 px-5 py-2.5 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-2">
+                <i class="fa-solid fa-file-excel"></i> Xuất Excel (US20)
+              </button>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden fade-in flex flex-col h-[calc(100vh-220px)]">
+              <div class="overflow-auto flex-1">
+                <table class="w-full text-left border-collapse">
+                  <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      <th class="p-4 w-16">Hình</th>
+                      <th class="p-4">Thông tin SP</th>
+                      <th class="p-4 text-center">Danh mục</th>
+                      <th class="p-4 text-right">Giá vốn</th>
+                      <th class="p-4 text-right">Giá bán</th>
+                      <th class="p-4 text-center">Tồn kho</th>
+                      <th class="p-4 text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                    ${this._generateProductRows(products)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
         }
 
         _generateProductRows(products) {
           if (products.length === 0)
-            return `<tr><td colspan="7" class="text-center py-8 text-gray-500">Không có dữ liệu</td></tr>`;
-
+            return `<tr><td colspan="7" class="p-8 text-center text-slate-400">Không tìm thấy dữ liệu phù hợp</td></tr>`;
           return products
-            .map(
-              (p) => `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 font-medium">${p.sku}</td>
-                        <td class="px-6 py-4">
-                            <div class="font-medium text-gray-900">${
-                              p.name
-                            }</div>
-                            <div class="text-xs text-gray-500">${p.unit}</div>
-                        </td>
-                        <td class="px-6 py-4"><span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded">${
-                          p.category
-                        }</span></td>
-                        <td class="px-6 py-4 text-right">${FORMATTER.currency(
-                          p.costPrice
-                        )}</td>
-                        <td class="px-6 py-4 text-right">${FORMATTER.currency(
-                          p.sellingPrice
-                        )}</td>
-                        <td class="px-6 py-4 text-center">
-                            <span class="${
-                              p.currentStock <= p.minStock
-                                ? "text-red-600 font-bold"
-                                : "text-green-600"
-                            }">
-                                ${p.currentStock}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 text-center">
-                            <div class="flex justify-center gap-2">
-                                <button onclick="app.showStockCard('${
-                                  p.id
-                                }')" title="Thẻ kho (US19)" class="text-blue-500 hover:text-blue-700"><i class="fa-solid fa-list-ol"></i></button>
-                                ${
-                                  [ROLES.OWNER, ROLES.MANAGER].includes(
-                                    this.currentRole
-                                  )
-                                    ? `<button onclick="app.openProductModal('${p.id}')" title="Sửa (US02)" class="text-yellow-500 hover:text-yellow-700"><i class="fa-solid fa-pen"></i></button>
-                                   <button onclick="app.deleteProduct('${p.id}')" title="Xóa (US04)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>`
-                                    : ""
-                                }
-                            </div>
-                        </td>
-                    </tr>
-                `
-            )
+            .map((p) => {
+              const isLow = p.currentStock <= p.minStock;
+              return `
+              <tr class="hover:bg-slate-50 transition group">
+                <td class="p-4">
+                  <div class="w-10 h-10 rounded bg-slate-200 flex items-center justify-center text-slate-400 text-xs overflow-hidden">
+                    ${
+                      p.image
+                        ? `<img src="${p.image}" class="w-full h-full object-cover" onerror="this.style.display='none'">`
+                        : '<i class="fa-solid fa-image"></i>'
+                    }
+                  </div>
+                </td>
+                <td class="p-4">
+                  <div class="font-bold text-slate-800">${p.name}</div>
+                  <div class="text-xs text-slate-500 font-mono">${p.sku}</div>
+                </td>
+                <td class="p-4 text-center"><span class="px-2 py-1 rounded-full bg-slate-100 text-xs text-slate-600">${
+                  p.category
+                }</span></td>
+                <td class="p-4 text-right font-medium">${UTILS.formatCurrency(
+                  p.costPrice
+                )}</td>
+                <td class="p-4 text-right font-medium text-brand-600">${UTILS.formatCurrency(
+                  p.sellingPrice
+                )}</td>
+                <td class="p-4 text-center">
+                  <div class="flex flex-col items-center">
+                    <span class="font-bold ${
+                      isLow ? "text-rose-600" : "text-emerald-600"
+                    }">${p.currentStock}</span>
+                    ${
+                      isLow
+                        ? `<span class="text-[10px] text-rose-500 bg-rose-50 px-1 rounded mt-1">Dưới mức min (${p.minStock})</span>`
+                        : ""
+                    }
+                  </div>
+                </td>
+                <td class="p-4 text-center">
+                  <div class="flex justify-center gap-2 opacity-60 group-hover:opacity-100 transition">
+                    <button onclick="app.showProductHistory('${
+                      p.id
+                    }')" title="Lịch sử (US19)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                    ${
+                      this.currentUser.role !== "STAFF"
+                        ? `
+                    <button onclick="app.openProductModal('${p.id}')" title="Sửa (US02)" class="w-8 h-8 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="app.softDeleteProduct('${p.id}')" title="Xóa (US04)" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100"><i class="fa-solid fa-trash"></i></button>
+                    `
+                        : ""
+                    }
+                  </div>
+                </td>
+              </tr>
+            `;
+            })
             .join("");
         }
 
-        /**
-         * VIEW: TRANSACTION FORM (US05, US06, US14, US15)
-         * Dùng chung cho Nhập/Xuất/Trả hàng
-         */
-        renderTransactionForm(container, type) {
-          const title =
-            type === TX_TYPES.IMPORT
-              ? "Tạo phiếu Nhập kho"
-              : "Tạo phiếu Bán hàng";
-          const isExport = type === TX_TYPES.EXPORT;
-          const products = this.productManager.getAll();
-
-          container.innerHTML = `
-                    <div class="flex gap-6 h-full">
-                        <!-- Left: Product Selector -->
-                        <div class="w-2/3 flex flex-col">
-                            <h2 class="text-2xl font-bold mb-4">${title}</h2>
-                            <div class="bg-white p-4 rounded shadow mb-4">
-                                <input type="text" id="txSearch" placeholder="Tìm sản phẩm để thêm..." class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none">
-                            </div>
-                            <div class="flex-1 bg-white rounded shadow overflow-y-auto p-2 grid grid-cols-3 gap-3 content-start">
-                                ${products
-                                  .map(
-                                    (p) => `
-                                    <div onclick="app.addToCart('${
-                                      p.id
-                                    }')" class="border rounded p-3 cursor-pointer hover:shadow-md hover:border-blue-500 transition bg-white flex flex-col justify-between h-32">
-                                        <div>
-                                            <p class="font-bold text-sm truncate" title="${
-                                              p.name
-                                            }">${p.name}</p>
-                                            <p class="text-xs text-gray-500">${
-                                              p.sku
-                                            }</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-blue-600 font-bold">${FORMATTER.currency(
-                                              isExport
-                                                ? p.sellingPrice
-                                                : p.costPrice
-                                            )}</p>
-                                            <p class="text-xs text-right mt-1">Tồn: ${
-                                              p.currentStock
-                                            }</p>
-                                        </div>
-                                    </div>
-                                `
-                                  )
-                                  .join("")}
-                            </div>
-                        </div>
-
-                        <!-- Right: Cart & Checkout -->
-                        <div class="w-1/3 bg-white shadow-lg rounded-lg flex flex-col">
-                            <div class="p-4 border-b bg-gray-50">
-                                <h3 class="font-bold text-lg">Thông tin phiếu</h3>
-                                ${
-                                  isExport
-                                    ? `
-                                    <div class="mt-2">
-                                        <input id="customerName" type="text" placeholder="Tên khách hàng (US14)" class="w-full border rounded p-2 text-sm mb-2">
-                                        <input id="customerPhone" type="text" placeholder="SĐT khách hàng" class="w-full border rounded p-2 text-sm">
-                                    </div>
-                                `
-                                    : `
-                                    <div class="mt-2">
-                                        <select id="supplierSelect" class="w-full border rounded p-2 text-sm">
-                                            <option value="">Chọn Nhà cung cấp (US12)</option>
-                                            ${this.storage
-                                              .get(this.storage.KEYS.SUPPLIERS)
-                                              .map(
-                                                (s) =>
-                                                  `<option value="${s.id}">${s.name}</option>`
-                                              )
-                                              .join("")}
-                                        </select>
-                                    </div>
-                                `
-                                }
-                            </div>
-                            
-                            <div class="flex-1 overflow-y-auto p-4 space-y-3" id="cartContainer">
-                                <!-- Cart items injected here -->
-                                <p class="text-center text-gray-400 mt-10">Chưa có sản phẩm nào</p>
-                            </div>
-
-                            <div class="p-4 border-t bg-gray-50">
-                                <div class="flex justify-between mb-2 text-lg font-bold">
-                                    <span>Tổng tiền:</span>
-                                    <span id="cartTotal">0 ₫</span>
-                                </div>
-                                <button onclick="app.submitTransaction('${type}')" class="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 transition">
-                                    HOÀN TẤT
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-          // Init Cart State
-          this.currentCart = [];
+        filterCategory(cat) {
+          const products = this.db
+            .getProducts()
+            .filter((p) => p.category === cat);
+          document.querySelector("#productTableBody").innerHTML =
+            this._generateProductRows(products);
         }
 
-        addToCart(productId) {
-          const product = this.productManager.getById(productId);
-          const existingItem = this.currentCart.find(
-            (i) => i.productId === productId
-          );
+        // --- VIEW: TRANSACTION FORMS ---
+        renderTransactionForm(container, type) {
+          const config = TX_TYPES[type];
+          const products = this.db.getProducts();
 
-          if (existingItem) {
-            existingItem.quantity++;
-          } else {
-            const price =
-              this.currentView === "EXPORT"
-                ? product.sellingPrice
-                : product.costPrice;
-            this.currentCart.push({
+          container.innerHTML = `
+            <div class="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] fade-in">
+              <!-- Left: Product Selector -->
+              <div class="lg:w-2/3 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-100 bg-slate-50">
+                  <input type="text" id="txSearch" placeholder="Tìm kiếm sản phẩm để thêm..." 
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+                <div id="txProductGrid" class="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
+                  ${products
+                    .map(
+                      (p) => `
+                    <div onclick="app.addToCart('${
+                      p.id
+                    }', '${type}')" class="group bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-brand-500 hover:shadow-md transition relative overflow-hidden select-none">
+                      <div class="text-sm font-bold text-slate-800 truncate mb-1" title="${
+                        p.name
+                      }">${p.name}</div>
+                      <div class="flex justify-between items-end">
+                        <div class="text-xs text-slate-500 font-mono">${
+                          p.sku
+                        }</div>
+                        <div class="text-xs font-bold ${
+                          p.currentStock <= 0
+                            ? "text-rose-500"
+                            : "text-emerald-600"
+                        }">Kho: ${p.currentStock}</div>
+                      </div>
+                      <div class="absolute inset-0 bg-brand-50/20 hidden group-active:block"></div>
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>
+              </div>
+
+              <!-- Right: Cart & Submit -->
+              <div class="lg:w-1/3 flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+                <div class="p-4 ${
+                  config.bg
+                } border-b border-slate-100 flex items-center justify-between">
+                  <h3 class="font-bold ${
+                    config.color
+                  }"><i class="fa-solid fa-file-pen mr-2"></i>Phiếu ${
+            config.label
+          }</h3>
+                  <span class="text-xs bg-white px-2 py-1 rounded border border-slate-200">${new Date().toLocaleDateString()}</span>
+                </div>
+                
+                <div class="p-4 space-y-3 bg-slate-50 border-b border-slate-200">
+                  ${
+                    type === "DAMAGE"
+                      ? `<div class="text-xs font-bold text-slate-500 uppercase mb-1">Lý do hủy (US07, US17) <span class="text-red-500">*</span></div>
+                     <select id="txReason" class="w-full text-sm border rounded p-2"><option value="">-- Chọn lý do --</option><option>Hư hỏng</option><option>Hết hạn</option><option>Lỗi SX</option><option>Khác</option></select>`
+                      : `<input type="text" id="txReason" placeholder="Ghi chú / Lý do (US07)..." class="w-full text-sm border rounded p-2">`
+                  }
+                </div>
+
+                <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2">
+                  <div class="text-center text-slate-400 py-10 flex flex-col items-center">
+                    <i class="fa-solid fa-basket-shopping text-3xl mb-2 opacity-50"></i>
+                    <p>Chưa chọn sản phẩm</p>
+                  </div>
+                </div>
+
+                <div class="p-4 bg-slate-50 border-t border-slate-200">
+                  <div class="flex justify-between items-center mb-4">
+                    <span class="text-slate-500 font-medium">Tổng giá trị</span>
+                    <span id="cartTotal" class="text-xl font-bold text-slate-800">0 ₫</span>
+                  </div>
+                  <button onclick="app.submitTransaction('${type}')" class="w-full py-3 rounded-lg font-bold text-white shadow-lg transition transform active:scale-95 ${
+            type === "DAMAGE"
+              ? "bg-rose-600 hover:bg-rose-700"
+              : "bg-brand-600 hover:bg-brand-700"
+          }">
+                    Hoàn Tất
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.getElementById("txSearch").addEventListener("input", (e) => {
+            const kw = e.target.value.toLowerCase();
+            document
+              .getElementById("txProductGrid")
+              .childNodes.forEach((el) => {
+                if (el.nodeType === 1)
+                  el.style.display = el.innerText.toLowerCase().includes(kw)
+                    ? "block"
+                    : "none";
+              });
+          });
+        }
+
+        addToCart(productId, type) {
+          const product = this.db.getProduct(productId);
+          const price =
+            type === "IMPORT" || type === "DAMAGE"
+              ? product.costPrice
+              : product.sellingPrice;
+
+          const existing = this.cart.find((i) => i.productId === productId);
+          if (existing) existing.quantity++;
+          else
+            this.cart.push({
               productId,
               quantity: 1,
               price,
               name: product.name,
-              maxStock: product.currentStock,
+              max: product.currentStock,
             });
-          }
-          this.renderCart();
+
+          this.renderCart(type);
         }
 
-        renderCart() {
-          const container = document.getElementById("cartContainer");
+        renderCart(type) {
+          const container = document.getElementById("cartItems");
           const totalEl = document.getElementById("cartTotal");
 
-          if (this.currentCart.length === 0) {
-            container.innerHTML =
-              '<p class="text-center text-gray-400 mt-10">Chưa có sản phẩm nào</p>';
+          if (!this.cart.length) {
+            container.innerHTML = `<div class="text-center text-slate-400 py-10 flex flex-col items-center"><i class="fa-solid fa-basket-shopping text-3xl mb-2 opacity-50"></i><p>Chưa chọn sản phẩm</p></div>`;
             totalEl.innerText = "0 ₫";
             return;
           }
 
           let total = 0;
-          container.innerHTML = this.currentCart
-            .map((item, index) => {
+          container.innerHTML = this.cart
+            .map((item, idx) => {
               total += item.price * item.quantity;
               return `
-                        <div class="flex justify-between items-center border-b pb-2">
-                            <div class="flex-1">
-                                <p class="font-medium text-sm truncate w-40">${
-                                  item.name
-                                }</p>
-                                <p class="text-xs text-gray-500">${FORMATTER.currency(
-                                  item.price
-                                )}</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="app.updateCartQty(${index}, -1)" class="w-6 h-6 bg-gray-200 rounded hover:bg-gray-300">-</button>
-                                <span class="font-bold text-sm w-6 text-center">${
-                                  item.quantity
-                                }</span>
-                                <button onclick="app.updateCartQty(${index}, 1)" class="w-6 h-6 bg-gray-200 rounded hover:bg-gray-300">+</button>
-                            </div>
-                            <button onclick="app.removeFromCart(${index})" class="ml-2 text-red-500"><i class="fa-solid fa-times"></i></button>
-                        </div>
-                    `;
+              <div class="flex items-center justify-between bg-white p-2 rounded border border-slate-100 shadow-sm slide-in-right">
+                <div class="flex-1 min-w-0 pr-2">
+                  <div class="text-sm font-medium truncate">${item.name}</div>
+                  <div class="text-xs text-slate-400">${UTILS.formatCurrency(
+                    item.price
+                  )}</div>
+                </div>
+                <div class="flex items-center bg-slate-100 rounded">
+                  <button onclick="app.updateCartQty(${idx}, -1, '${type}')" class="w-6 h-6 hover:bg-slate-200 rounded text-xs"><i class="fa-solid fa-minus"></i></button>
+                  <span class="w-8 text-center text-sm font-bold">${
+                    item.quantity
+                  }</span>
+                  <button onclick="app.updateCartQty(${idx}, 1, '${type}')" class="w-6 h-6 hover:bg-slate-200 rounded text-xs"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <button onclick="app.removeFromCart(${idx}, '${type}')" class="ml-2 text-rose-400 hover:text-rose-600"><i class="fa-solid fa-times"></i></button>
+              </div>
+            `;
             })
             .join("");
-          totalEl.innerText = FORMATTER.currency(total);
+          totalEl.innerText = UTILS.formatCurrency(total);
         }
 
-        updateCartQty(index, change) {
-          const item = this.currentCart[index];
+        updateCartQty(idx, change, type) {
+          const item = this.cart[idx];
           const newQty = item.quantity + change;
-
           if (newQty <= 0) {
-            this.currentCart.splice(index, 1);
-          } else {
-            // Validate tồn kho nếu là xuất
-            if (this.currentView === "EXPORT" && newQty > item.maxStock) {
-              Utils.showToast(
-                `Chỉ còn ${item.maxStock} sản phẩm trong kho!`,
-                "error"
-              );
-              return;
-            }
-            item.quantity = newQty;
-          }
-          this.renderCart();
-        }
-
-        removeFromCart(index) {
-          this.currentCart.splice(index, 1);
-          this.renderCart();
-        }
-
-        submitTransaction(type) {
-          if (this.currentCart.length === 0) {
-            Utils.showToast("Giỏ hàng trống!", "warning");
+            this.removeFromCart(idx, type);
             return;
           }
 
-          try {
-            const metaData = {};
-            if (type === TX_TYPES.EXPORT) {
-              metaData.customerName =
-                document.getElementById("customerName").value;
-              metaData.customerPhone =
-                document.getElementById("customerPhone").value;
-            } else if (type === TX_TYPES.IMPORT) {
-              metaData.supplierId =
-                document.getElementById("supplierSelect").value;
-            }
+          // Validation for EXPORT/DAMAGE
+          if (["EXPORT", "DAMAGE"].includes(type) && newQty > item.max) {
+            UTILS.showToast(`Chỉ còn ${item.max} tồn kho!`, "error");
+            return;
+          }
+          item.quantity = newQty;
+          this.renderCart(type);
+        }
 
-            metaData.createdBy = this.currentRole;
+        removeFromCart(idx, type) {
+          this.cart.splice(idx, 1);
+          this.renderCart(type);
+        }
 
-            this.transactionManager.createTransaction(
-              type,
-              this.currentCart,
-              metaData
+        submitTransaction(type) {
+          if (!this.cart.length)
+            return UTILS.showToast("Giỏ hàng trống!", "warning");
+          const reason = document.getElementById("txReason").value;
+          if (type === "DAMAGE" && !reason)
+            return UTILS.showToast(
+              "Vui lòng chọn lý do hủy hàng (US07)",
+              "error"
             );
 
-            Utils.showToast("Giao dịch thành công!", "success");
-            this.currentCart = []; // Clear cart
-            this.renderView("DASHBOARD"); // Back to dashboard
-          } catch (error) {
-            Utils.showToast(error.message, "error");
+          try {
+            this.db.addTransaction(type, this.cart, {
+              reason,
+              user: this.currentUser.fullname,
+            });
+            UTILS.showToast("Giao dịch thành công!");
+            this.cart = [];
+            this.navigate("DASHBOARD");
+          } catch (e) {
+            UTILS.showToast(e.message, "error");
           }
         }
 
-        /**
-         * VIEW: MODALS (US01, US02, US19)
-         */
-        openProductModal(id = null) {
-          const isEdit = !!id;
-          const product = isEdit ? this.productManager.getById(id) : {};
-          const modal = document.getElementById("modalBackdrop");
+        renderStocktake(container) {
+          const products = this.db.getProducts();
+          container.innerHTML = `
+            <div class="flex flex-col h-[calc(100vh-140px)] fade-in">
+              <div class="flex justify-between items-center mb-4">
+                <div class="text-sm text-slate-500">Nhập số lượng thực tế. Hệ thống sẽ tự động tạo phiếu điều chỉnh.</div>
+                <button onclick="app.submitStocktake()" class="bg-amber-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-600 shadow transition flex items-center gap-2">
+                  <i class="fa-solid fa-check-double"></i> Hoàn Tất & Cân Bằng (US11)
+                </button>
+              </div>
+
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
+                <div class="overflow-auto flex-1">
+                  <table class="w-full text-left">
+                    <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase sticky top-0 z-10 shadow-sm">
+                      <tr><th class="p-4">Sản Phẩm</th><th class="p-4 text-center">Tồn Hệ Thống</th><th class="p-4 text-center w-40">Thực Tế (US10)</th><th class="p-4 text-center">Chênh Lệch</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      ${products
+                        .map(
+                          (p) => `
+                        <tr>
+                          <td class="p-4"><div class="font-bold text-slate-700">${p.name}</div><div class="text-xs text-slate-400 font-mono">${p.sku}</div></td>
+                          <td class="p-4 text-center font-bold text-slate-600">${p.currentStock}</td>
+                          <td class="p-4"><input type="number" id="stk_${p.id}" value="${p.currentStock}" onchange="app.calcStockDiff('${p.id}', ${p.currentStock})" class="w-full border-2 border-slate-200 rounded px-3 py-1 text-center font-bold text-blue-600 focus:border-brand-500 outline-none"></td>
+                          <td class="p-4 text-center font-bold text-slate-400" id="diff_${p.id}">0</td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        calcStockDiff(id, systemStock) {
+          const val = parseInt(document.getElementById(`stk_${id}`).value) || 0;
+          const diff = val - systemStock;
+          const el = document.getElementById(`diff_${id}`);
+          el.innerText = diff > 0 ? `+${diff}` : diff;
+          el.className = `p-4 text-center font-bold ${
+            diff === 0
+              ? "text-slate-400"
+              : diff > 0
+              ? "text-emerald-600"
+              : "text-rose-600"
+          }`;
+        }
+
+        submitStocktake() {
+          if (!confirm("Xác nhận chốt số liệu kiểm kê?")) return;
+          const adjustments = [];
+          this.db.getProducts().forEach((p) => {
+            const actual =
+              parseInt(document.getElementById(`stk_${p.id}`).value) || 0;
+            if (actual !== p.currentStock)
+              adjustments.push({
+                productId: p.id,
+                quantity: actual,
+                price: p.costPrice,
+                name: p.name,
+              });
+          });
+          if (!adjustments.length)
+            return UTILS.showToast("Số liệu khớp hoàn toàn", "info");
+          this.db.addTransaction("STOCKTAKE", adjustments, {
+            reason: "Kiểm kê định kỳ (US11)",
+            user: this.currentUser.fullname,
+          });
+          UTILS.showToast("Đã cân bằng kho thành công!");
+          this.navigate("DASHBOARD");
+        }
+
+        // --- REPORT & HISTORY ---
+        renderReport(container) {
+          const txs = this.db.transactions;
+          container.innerHTML = `
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col fade-in">
+              <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-700">Lịch sử giao dịch toàn hệ thống</h3>
+                <span class="text-xs text-slate-400">Hiển thị ${
+                  txs.length
+                } giao dịch</span>
+              </div>
+              <div class="overflow-auto flex-1">
+                 <table class="w-full text-left">
+                    <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase sticky top-0">
+                      <tr><th class="p-4">Mã GD</th><th class="p-4">Ngày</th><th class="p-4">Loại</th><th class="p-4">Người tạo</th><th class="p-4">Ghi chú</th><th class="p-4 text-right">Tổng Tiền</th><th class="p-4 text-center">Chi tiết</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                      ${txs
+                        .map(
+                          (t) => `
+                        <tr class="hover:bg-slate-50">
+                          <td class="p-4 font-mono text-slate-500 text-xs">${
+                            t.id
+                          }</td>
+                          <td class="p-4">${UTILS.formatDate(t.date)}</td>
+                          <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
+                            TX_TYPES[t.type].bg
+                          } ${TX_TYPES[t.type].color}">${
+                            TX_TYPES[t.type].label
+                          }</span></td>
+                          <td class="p-4 text-slate-600">${
+                            t.createdBy || "System"
+                          }</td>
+                          <td class="p-4 text-slate-500 italic truncate max-w-xs">${
+                            t.reason || "-"
+                          }</td>
+                          <td class="p-4 text-right font-medium">${UTILS.formatCurrency(
+                            t.totalValue
+                          )}</td>
+                          <td class="p-4 text-center"><button onclick="app.showTransactionDetail('${
+                            t.id
+                          }')" class="text-brand-600 hover:underline text-xs">Xem</button></td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                 </table>
+              </div>
+            </div>
+          `;
+        }
+
+        showTransactionDetail(txId) {
+          const tx = this.db.transactions.find((t) => t.id === txId);
+          const overlay = document.getElementById("modalOverlay");
           const content = document.getElementById("modalContent");
 
-          modal.classList.remove("hidden");
-          modal.classList.add("flex");
-          setTimeout(() => {
-            content.classList.remove("scale-95", "opacity-0");
-            content.classList.add("scale-100", "opacity-100");
-          }, 10);
+          content.innerHTML = `
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                   <div>
+                       <h3 class="font-bold text-lg text-slate-800">Chi tiết giao dịch</h3>
+                       <div class="text-xs text-slate-500 font-mono">${txId} • ${UTILS.formatDate(
+            tx.date
+          )}</div>
+                   </div>
+                   <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+                <div class="p-6 bg-slate-50 border-b border-slate-100 flex gap-4">
+                     <div class="flex-1">
+                         <div class="text-xs text-slate-500 uppercase font-bold">Loại phiếu</div>
+                         <div class="text-sm font-medium ${
+                           TX_TYPES[tx.type].color
+                         }">${TX_TYPES[tx.type].label}</div>
+                     </div>
+                     <div class="flex-1">
+                         <div class="text-xs text-slate-500 uppercase font-bold">Người tạo</div>
+                         <div class="text-sm font-medium">${
+                           tx.createdBy || "System"
+                         }</div>
+                     </div>
+                     <div class="flex-1">
+                         <div class="text-xs text-slate-500 uppercase font-bold">Lý do/Ghi chú</div>
+                         <div class="text-sm font-medium italic">${
+                           tx.reason || "-"
+                         }</div>
+                     </div>
+                </div>
+                <div class="flex-1 overflow-auto p-0">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-white text-slate-500 font-bold border-b border-slate-100">
+                            <tr><th class="p-4">Sản phẩm</th><th class="p-4 text-right">Đơn giá</th><th class="p-4 text-center">Số lượng</th><th class="p-4 text-right">Thành tiền</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${tx.items
+                              .map(
+                                (i) => `
+                                <tr>
+                                    <td class="p-4 font-medium text-slate-700">${
+                                      i.name
+                                    }</td>
+                                    <td class="p-4 text-right text-slate-500">${UTILS.formatCurrency(
+                                      i.price
+                                    )}</td>
+                                    <td class="p-4 text-center font-bold">${
+                                      i.quantity
+                                    }</td>
+                                    <td class="p-4 text-right font-medium">${UTILS.formatCurrency(
+                                      i.price * i.quantity
+                                    )}</td>
+                                </tr>
+                            `
+                              )
+                              .join("")}
+                        </tbody>
+                        <tfoot class="bg-slate-50 font-bold">
+                            <tr>
+                                <td colspan="3" class="p-4 text-right text-slate-600">Tổng cộng:</td>
+                                <td class="p-4 text-right text-brand-600">${UTILS.formatCurrency(
+                                  tx.totalValue
+                                )}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+          this._showModal(overlay, content);
+        }
+
+        // --- MODALS & HELPERS ---
+        openProductModal(id = null) {
+          const isEdit = !!id;
+          const p = isEdit ? this.db.getProduct(id) : {};
+          const overlay = document.getElementById("modalOverlay");
+          const content = document.getElementById("modalContent");
 
           content.innerHTML = `
-                    <div class="p-6">
-                        <h3 class="text-xl font-bold mb-4">${
-                          isEdit ? "Sửa sản phẩm" : "Thêm sản phẩm mới"
-                        }</h3>
-                        <form id="productForm" class="space-y-4">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Mã SKU</label>
-                                    <input type="text" name="sku" value="${
-                                      product.sku || ""
-                                    }" ${
-            isEdit ? "disabled" : ""
-          } class="mt-1 w-full border rounded p-2" required>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Tên sản phẩm</label>
-                                    <input type="text" name="name" value="${
-                                      product.name || ""
-                                    }" class="mt-1 w-full border rounded p-2" required>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Nhóm hàng (US03)</label>
-                                    <select name="category" class="mt-1 w-full border rounded p-2">
-                                        <option value="Thực phẩm" ${
-                                          product.category === "Thực phẩm"
-                                            ? "selected"
-                                            : ""
-                                        }>Thực phẩm</option>
-                                        <option value="Đồ uống" ${
-                                          product.category === "Đồ uống"
-                                            ? "selected"
-                                            : ""
-                                        }>Đồ uống</option>
-                                        <option value="Điện tử" ${
-                                          product.category === "Điện tử"
-                                            ? "selected"
-                                            : ""
-                                        }>Điện tử</option>
-                                        <option value="Khác" ${
-                                          product.category === "Khác"
-                                            ? "selected"
-                                            : ""
-                                        }>Khác</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Đơn vị tính</label>
-                                    <input type="text" name="unit" value="${
-                                      product.unit || "Cái"
-                                    }" class="mt-1 w-full border rounded p-2">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Giá vốn</label>
-                                    <input type="number" name="costPrice" value="${
-                                      product.costPrice || 0
-                                    }" class="mt-1 w-full border rounded p-2" required min="0">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Giá bán</label>
-                                    <input type="number" name="sellingPrice" value="${
-                                      product.sellingPrice || 0
-                                    }" class="mt-1 w-full border rounded p-2" required min="0">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Định mức tồn tối thiểu (US09)</label>
-                                    <input type="number" name="minStock" value="${
-                                      product.minStock || 5
-                                    }" class="mt-1 w-full border rounded p-2">
-                                </div>
-                            </div>
-                            <div class="flex justify-end gap-3 mt-6">
-                                <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Hủy</button>
-                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Lưu</button>
-                            </div>
-                        </form>
-                    </div>
-                `;
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 class="font-bold text-lg text-slate-800">${
+                isEdit ? "Sửa Sản Phẩm (US02)" : "Thêm Sản Phẩm Mới (US01)"
+              }</h3>
+              <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <form id="productForm" class="p-6 grid grid-cols-2 gap-4 overflow-y-auto">
+              <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 uppercase mb-1">SKU *</label><input name="sku" value="${
+                p.sku || ""
+              }" ${
+            isEdit
+              ? 'disabled class="bg-slate-100 cursor-not-allowed w-full border rounded p-2"'
+              : 'class="w-full border rounded p-2"'
+          } required></div>
+              <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tên Sản Phẩm *</label><input name="name" value="${
+                p.name || ""
+              }" class="w-full border rounded p-2" required></div>
+              <div class="col-span-1">
+                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Danh Mục (US03)</label>
+                 <select name="category" class="w-full border rounded p-2">
+                    ${this.db.settings.categories
+                      .map(
+                        (c) =>
+                          `<option ${
+                            p.category === c ? "selected" : ""
+                          }>${c}</option>`
+                      )
+                      .join("")}
+                 </select>
+              </div>
+              <div class="col-span-1">
+                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Đơn Vị Tính</label>
+                 <select name="unit" class="w-full border rounded p-2">
+                    ${this.db.settings.units
+                      .map(
+                        (u) =>
+                          `<option ${
+                            p.unit === u ? "selected" : ""
+                          }>${u}</option>`
+                      )
+                      .join("")}
+                 </select>
+              </div>
+              <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Giá Vốn</label><input type="number" name="costPrice" value="${
+                p.costPrice || 0
+              }" class="w-full border rounded p-2" required></div>
+              <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Giá Bán</label><input type="number" name="sellingPrice" value="${
+                p.sellingPrice || 0
+              }" class="w-full border rounded p-2" required></div>
+              <div class="col-span-2"><label class="block text-xs font-bold text-slate-500 uppercase mb-1">URL Hình Ảnh</label><input name="image" value="${
+                p.image || ""
+              }" class="w-full border rounded p-2"></div>
+              
+              <div class="col-span-2 bg-amber-50 p-4 rounded-lg border border-amber-200 mt-2">
+                <div class="flex items-center gap-3">
+                   <div class="bg-amber-100 text-amber-600 p-2 rounded"><i class="fa-solid fa-bell"></i></div>
+                   <div class="flex-1"><div class="text-sm font-bold text-amber-800">Cảnh báo tồn kho (US09)</div><div class="text-xs text-amber-600">Báo đỏ khi tồn thấp hơn mức này.</div></div>
+                   <input type="number" name="minStock" value="${
+                     p.minStock || 5
+                   }" class="w-20 border border-amber-300 rounded p-2 text-center font-bold text-amber-800 outline-none">
+                </div>
+              </div>
+
+              <div class="col-span-2 mt-4 flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Hủy</button>
+                <button type="submit" class="px-6 py-2 bg-brand-600 text-white font-bold rounded-lg shadow hover:bg-brand-700">Lưu Dữ Liệu</button>
+              </div>
+            </form>
+          `;
+
+          this._showModal(overlay, content);
 
           document.getElementById("productForm").onsubmit = (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-
-            // Convert numbers
+            const data = Object.fromEntries(formData);
             data.costPrice = Number(data.costPrice);
             data.sellingPrice = Number(data.sellingPrice);
             data.minStock = Number(data.minStock);
 
             try {
               if (isEdit) {
-                this.productManager.update(id, data);
-                Utils.showToast("Cập nhật thành công");
+                this.db.updateProduct(id, data);
+                UTILS.showToast("Cập nhật thành công!");
               } else {
-                this.productManager.add(data);
-                Utils.showToast("Thêm mới thành công");
+                this.db.addProduct(data);
+                UTILS.showToast("Thêm mới thành công!");
               }
               this.closeModal();
-              this.renderView("PRODUCTS");
+              this.renderProductList(
+                document.querySelector("#productTableBody").parentElement
+                  .parentElement.parentElement
+              );
             } catch (err) {
-              Utils.showToast(err.message, "error");
+              UTILS.showToast(err.message, "error");
             }
           };
         }
 
-        // US19: Stock Card Modal
-        showStockCard(productId) {
-          const history = this.transactionManager.getProductHistory(productId);
-          const product = this.productManager.getById(productId);
-
-          const modal = document.getElementById("modalBackdrop");
+        showProductHistory(id) {
+          const p = this.db.getProduct(id);
+          const txs = this.db.transactions.filter((t) =>
+            t.items.some((i) => i.productId === id)
+          );
+          const overlay = document.getElementById("modalOverlay");
           const content = document.getElementById("modalContent");
 
-          modal.classList.remove("hidden");
-          modal.classList.add("flex");
-          setTimeout(() => {
-            content.classList.remove("scale-95", "opacity-0");
-            content.classList.add("scale-100", "opacity-100");
-          }, 10);
-
           content.innerHTML = `
-                    <div class="p-6">
-                        <div class="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 class="text-xl font-bold">Thẻ kho: ${
-                                  product.name
-                                }</h3>
-                                <p class="text-sm text-gray-500">SKU: ${
-                                  product.sku
-                                } | Tồn hiện tại: <span class="font-bold text-blue-600">${
-            product.currentStock
-          }</span></p>
-                            </div>
-                            <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
-                        </div>
-                        
-                        <div class="overflow-y-auto max-h-[60vh]">
-                            <table class="w-full text-sm text-left table-sticky">
-                                <thead class="bg-gray-100">
-                                    <tr>
-                                        <th class="px-4 py-2">Ngày</th>
-                                        <th class="px-4 py-2">Loại GD</th>
-                                        <th class="px-4 py-2">Mã GD</th>
-                                        <th class="px-4 py-2 text-right">SL thay đổi</th>
-                                        <th class="px-4 py-2 text-right">Đơn giá</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y">
-                                    ${
-                                      history.length > 0
-                                        ? history
-                                            .map((h) => {
-                                              const isIn = [
-                                                TX_TYPES.IMPORT,
-                                                TX_TYPES.RETURN,
-                                              ].includes(h.type);
-                                              const color = isIn
-                                                ? "text-green-600"
-                                                : "text-red-600";
-                                              const sign = isIn ? "+" : "-";
-                                              return `
-                                            <tr>
-                                                <td class="px-4 py-2">${FORMATTER.date(
-                                                  h.date
-                                                )}</td>
-                                                <td class="px-4 py-2"><span class="px-2 py-1 rounded text-xs font-bold ${
-                                                  isIn
-                                                    ? "bg-green-100 text-green-800"
-                                                    : "bg-red-100 text-red-800"
-                                                }">${h.type}</span></td>
-                                                <td class="px-4 py-2 text-gray-500 text-xs">${
-                                                  h.id
-                                                }</td>
-                                                <td class="px-4 py-2 text-right font-bold ${color}">${sign}${
-                                                h.itemQuantity
-                                              }</td>
-                                                <td class="px-4 py-2 text-right text-gray-500">${FORMATTER.currency(
-                                                  h.itemPrice
-                                                )}</td>
-                                            </tr>
-                                        `;
-                                            })
-                                            .join("")
-                                        : '<tr><td colspan="5" class="text-center py-4 text-gray-400">Chưa có giao dịch nào</td></tr>'
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
+             <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div><h3 class="font-bold text-lg text-slate-800">Thẻ Kho (US19)</h3><div class="text-sm text-slate-500">${
+                  p.name
+                } (${p.sku})</div></div>
+                <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+             </div>
+             <div class="flex-1 overflow-auto p-0">
+               <table class="w-full text-left text-sm">
+                 <thead class="bg-slate-50 text-slate-500 font-bold sticky top-0">
+                   <tr><th class="p-4">Ngày</th><th class="p-4">Loại GD</th><th class="p-4 text-right">SL Đổi</th><th class="p-4 text-right">Tồn Sau GD</th></tr>
+                 </thead>
+                 <tbody class="divide-y divide-slate-100">
+                   ${
+                     txs.length === 0
+                       ? '<tr><td colspan="4" class="p-6 text-center text-slate-400">Chưa có giao dịch phát sinh</td></tr>'
+                       : txs
+                           .map((t) => {
+                             const item = t.items.find(
+                               (i) => i.productId === id
+                             );
+                             const conf = TX_TYPES[t.type];
+                             const change =
+                               item.change || item.quantity * conf.sign;
+                             return `<tr>
+                           <td class="p-4 text-slate-600">${UTILS.formatDate(
+                             t.date
+                           )}</td>
+                           <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${
+                             conf.bg
+                           } ${conf.color}">${conf.label}</span></td>
+                           <td class="p-4 text-right font-bold ${
+                             change > 0 ? "text-emerald-600" : "text-rose-600"
+                           }">${change > 0 ? "+" : ""}${change}</td>
+                           <td class="p-4 text-right font-mono">${
+                             item.snapshotStock
+                           }</td>
+                         </tr>`;
+                           })
+                           .join("")
+                   }
+                 </tbody>
+               </table>
+             </div>
+           `;
+          this._showModal(overlay, content);
+        }
+
+        softDeleteProduct(id) {
+          if (confirm("Bạn có chắc chắn muốn ngưng kinh doanh sản phẩm này?")) {
+            this.db.deleteProduct(id);
+            UTILS.showToast("Đã xóa sản phẩm");
+            this.navigate("PRODUCTS");
+          }
+        }
+
+        exportExcel() {
+          const data = this.db
+            .getProducts()
+            .map((p) => [
+              p.sku,
+              p.name,
+              p.category,
+              p.currentStock,
+              p.costPrice,
+              p.sellingPrice,
+            ]);
+          const header = [
+            "SKU",
+            "Ten San Pham",
+            "Danh Muc",
+            "Ton Kho",
+            "Gia Von",
+            "Gia Ban",
+          ];
+          UTILS.exportToCSV(
+            `Inventory_Report_${new Date().toISOString().split("T")[0]}.csv`,
+            [header, ...data]
+          );
+          UTILS.showToast("Đã tải xuống file báo cáo");
+        }
+
+        resetData() {
+          if (confirm("Reset dữ liệu sẽ đăng xuất bạn. Tiếp tục?")) {
+            this.db.reset();
+            this.logout();
+          }
+        }
+
+        _showModal(overlay, content) {
+          overlay.classList.remove("hidden");
+          setTimeout(() => {
+            overlay.classList.remove("opacity-0");
+            content.classList.remove("opacity-0", "scale-95");
+          }, 10);
         }
 
         closeModal() {
-          const modal = document.getElementById("modalBackdrop");
+          const overlay = document.getElementById("modalOverlay");
           const content = document.getElementById("modalContent");
-          content.classList.remove("scale-100", "opacity-100");
-          content.classList.add("scale-95", "opacity-0");
-          setTimeout(() => {
-            modal.classList.add("hidden");
-            modal.classList.remove("flex");
-          }, 200);
-        }
-
-        deleteProduct(id) {
-          if (
-            confirm("Bạn có chắc chắn muốn xóa sản phẩm này? (Soft Delete)")
-          ) {
-            this.productManager.remove(id);
-            Utils.showToast("Đã xóa sản phẩm");
-            this.renderView("PRODUCTS");
-          }
-        }
-
-        // US20: Export Excel (Mock)
-        exportExcel() {
-          const data = this.productManager.getAll().map((p) => ({
-            SKU: p.sku,
-            Ten: p.name,
-            TonKho: p.currentStock,
-            GiaVon: p.costPrice,
-            GiaTriTon: p.currentStock * p.costPrice,
-          }));
-          console.table(data);
-          Utils.showToast("Đã xuất dữ liệu ra Console (F12) để kiểm tra!");
-        }
-
-        // Helpers for connecting UI events to Logic
-        generateMockData() {
-          if (confirm("Hành động này sẽ XÓA SẠCH dữ liệu cũ. Tiếp tục?")) {
-            new MockDataGenerator(this.storage).generate();
-          }
+          overlay.classList.add("opacity-0");
+          content.classList.add("opacity-0", "scale-95");
+          setTimeout(() => overlay.classList.add("hidden"), 200);
         }
       }
 
-      // --- INIT APP ---
-      const app = new UIManager();
+      // --- BOOTSTRAP ---
+      const app = new App();
 
-      // Expose app functions to window for onclick events in HTML strings
-      window.app = app;
+      // Seed Data if new
+      if (app.db.getProducts().length === 0) {
+        const mocks = [
+          {
+            sku: "SP001",
+            name: "iPhone 15 Pro Max",
+            category: "Điện Tử",
+            costPrice: 25000000,
+            sellingPrice: 30000000,
+            unit: "Cái",
+            minStock: 5,
+          },
+          {
+            sku: "SP002",
+            name: "Nồi Cơm Điện Sharp",
+            category: "Gia Dụng",
+            costPrice: 500000,
+            sellingPrice: 850000,
+            unit: "Cái",
+            minStock: 10,
+          },
+          {
+            sku: "SP003",
+            name: "Sữa Tươi Vinamilk",
+            category: "Thực Phẩm",
+            costPrice: 280000,
+            sellingPrice: 350000,
+            unit: "Thùng",
+            minStock: 20,
+          },
+          {
+            sku: "SP004",
+            name: "Áo Thun Polo",
+            category: "Thời Trang",
+            costPrice: 150000,
+            sellingPrice: 290000,
+            unit: "Cái",
+            minStock: 10,
+          },
+        ];
+        mocks.forEach((m) => app.db.addProduct(m));
+        app.db.addTransaction(
+          "IMPORT",
+          [
+            {
+              productId: app.db.products[0].id,
+              quantity: 10,
+              price: 25000000,
+              name: "iPhone 15 Pro Max",
+            },
+          ],
+          { user: "System Init" }
+        );
+      }
     </script>
   </body>
 </html>
